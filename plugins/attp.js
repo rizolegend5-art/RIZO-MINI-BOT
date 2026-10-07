@@ -40,4 +40,3 @@ async (conn, mek, m, { args, reply }) => {
         reply("*❌ STICKER BANANE ME ERROR AYA 🥺*")
     }
 })
-￼Enter
