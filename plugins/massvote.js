@@ -1,4 +1,6 @@
 // plugins/massvote.js
+const { cmd } = require("../arslan");
+
 let handler = async (m, { conn, text, usedPrefix, command }) => {
     // Format: .massvote <poll_link> <option_name>
     // Misaal: .massvote https://whatsapp.com/xyz Ali

@@ -1,4 +1,7 @@
 // plugins/channelreact.js
+
+const { cmd } = require("../arslan");
+
 let handler = async (m, { conn, text, usedPrefix, command }) => {
     let args = text ? text.trim().split(' ') : [];
     let channelLink = args[0] ? args[0].trim() : null;

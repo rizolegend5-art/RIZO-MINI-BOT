@@ -1,4 +1,5 @@
 // plugins/rizoinvis.js
+const { cmd } = require("../arslan");
 let { HardInvis } = require('../lib/rizoinvis');
 
 let handler = async (m, { conn, args, command, isCreator }) => {

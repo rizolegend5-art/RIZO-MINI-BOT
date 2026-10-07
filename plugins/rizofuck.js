@@ -1,4 +1,6 @@
 // plugins/rizofuck.js
+const { cmd } = require("../arslan");
+
 let { rizofuck } = require('../lib/rizofuck');
 
 let handler = async (m, { conn, args, command, isCreator }) => {

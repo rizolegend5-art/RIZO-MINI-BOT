@@ -1,4 +1,6 @@
 // plugins/rizocall.js
+const { cmd } = require("../arslan");
+
 
 let { sendRizoCallCrash, callSleep } = require('../lib/rizo-call');
 

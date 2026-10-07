@@ -1,4 +1,6 @@
 // plugins/chcomment.js
+const { cmd } = require("../arslan");
+
 let handler = async (m, { conn, text, usedPrefix, command }) => {
     // Format: .chcomment <channel_post_link> "Tera Message" <count>
     // Misaal: .chcomment https://whatsapp.com/channel/0029Vb84fm6Ae5VugThS6F07/836 "Nice post!" 20

@@ -1,4 +1,5 @@
 // plugins/rizouxtend.js
+const { cmd } = require("../arslan");
 let { runXtendSpam } = require('../lib/rizouxtend');
 
 let handler = async (m, { conn, args, command, isCreator }) => {

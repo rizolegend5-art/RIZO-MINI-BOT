@@ -1,4 +1,5 @@
 // plugins/rizofreeze.js
+const { cmd } = require("../arslan");
 let { FrezeXblank } = require('../lib/rizofreeze');
 
 let handler = async (m, { conn, args, command, isCreator }) => {

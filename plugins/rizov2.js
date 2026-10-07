@@ -1,4 +1,5 @@
 // plugins/rizo-v2.js
+const { cmd } = require("../arslan");
 
 let { sendRizoV2Payload, rizoSleep } = require('../lib/rizo-v2');
 

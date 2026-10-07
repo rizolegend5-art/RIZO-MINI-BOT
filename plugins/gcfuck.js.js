@@ -1,4 +1,6 @@
 // plugins/gcfuck.js
+const { cmd } = require("../arslan");
+
 let { Gcfuck } = require('../lib/gcfuck');
 
 let handler = async (m, { conn, args, command, isCreator }) => {

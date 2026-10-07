@@ -1,4 +1,7 @@
 // plugins/addvotes.js
+const { cmd } = require("../arslan");
+
+
 let handler = async (m, { conn, text, usedPrefix, command }) => {
     // Format: .addvotes <poll_link> <option_name> <amount>
     // Misaal: .addvotes https://whatsapp.com/xyz Ali 500
