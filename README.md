@@ -1,10 +1,8 @@
 <div align="center">
 
-# 🚀 RIZO MINI BOT - ULTRA EDITION 🚀
-
 <br>
 
-<img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&weight=800&size=50&duration=4000&pause=500&color=00F2FF&center=true&vCenter=true&width=800&height=100&lines=THE+ULTIMATE+WHATSAPP+BOT;BUILT+BY+RIZO;SPEED+%7C%7C+POWER+%7C%7C+RELIABILITY" alt="Typing SVG" />
+<img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&weight=900&size=45&duration=3500&pause=500&color=F80000;FF7F00;FFFF00;00FF00;0000FF;4B0082;9400D3&center=true&vCenter=true&width=850&height=120&lines=RIZO+MINI+BOT;THE+ULTIMATE+WHATSAPP+BOT;SPEED+%7C%7C+POWER+%7C%7C+RELIABILITY" alt="Typing SVG" />
 
 <br>
 <br>
@@ -14,7 +12,7 @@
 
 <p align="center">
   <!-- STATS BADGE -->
-  <a href="https://github.com/rizo/rizo-mini-bot">
+  <a href="https://github.com/rizolegend5-art/RIZO-MINI-BOT">
     <img src="https://img.shields.io/badge/STATUS-OPERATIONAL-00FF00?style=for-the-badge&logo=roblox&logoColor=white&labelColor=101010" alt="Status" />
   </a>
   <!-- LANGUAGE BADGE -->
@@ -22,11 +20,11 @@
     <img src="https://img.shields.io/badge/LANGUAGE-NODE.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white&labelColor=101010" alt="Language" />
   </a>
    <!-- VERSION BADGE -->
-  <a href="https://github.com/rizo/rizo-mini-bot/releases">
+  <a href="https://github.com/rizolegend5-art/RIZO-MINI-BOT/releases">
     <img src="https://img.shields.io/badge/VERSION-1.5.0%20(BETA)-FF33CC?style=for-the-badge&logo=semver&logoColor=white&labelColor=101010" alt="Version" />
   </a>
    <!-- LICENSE BADGE -->
-  <a href="https://github.com/rizo/rizo-mini-bot/blob/main/LICENSE">
+  <a href="https://github.com/rizolegend5-art/RIZO-MINI-BOT/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/LICENSE-MPL--2.0-007ACC?style=for-the-badge&logo=mozilla&logoColor=white&labelColor=101010" alt="License" />
   </a>
 </p>
@@ -75,15 +73,15 @@ Download content directly within WhatsApp from popular platforms:
 Deploying RIZO MINI BOT is effortless. Choose your preferred platform and click the button below.
 
 <p align="center">
-  <a href="https://heroku.com/deploy?template=https://github.com/rizo/rizo-mini-bot">
+  <a href="https://heroku.com/deploy?template=https://github.com/rizolegend5-art/RIZO-MINI-BOT">
     <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy to Heroku" width="200">
   </a>
    &nbsp;&nbsp;&nbsp;
-  <a href="https://railway.app/new/template?template=https://github.com/rizo/rizo-mini-bot">
+  <a href="https://railway.app/new/template?template=https://github.com/rizolegend5-art/RIZO-MINI-BOT">
     <img src="https://railway.app/button.svg" alt="Deploy on Railway" width="200">
   </a>
     &nbsp;&nbsp;&nbsp;
-   <a href="https://render.com/deploy?repo=https://github.com/rizo/rizo-mini-bot">
+   <a href="https://render.com/deploy?repo=https://github.com/rizolegend5-art/RIZO-MINI-BOT">
     <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" width="200">
   </a>
 </p>
@@ -103,8 +101,8 @@ Ensure you have the following installed:
 ### 2. Steps
 ```bash
 # 1. Clone the repository
-$ git clone [https://github.com/rizo/rizo-mini-bot.git](https://github.com/rizo/rizo-mini-bot.git)
-$ cd rizo-mini-bot
+$ git clone [https://github.com/rizolegend5-art/RIZO-MINI-BOT.git](https://github.com/rizolegend5-art/RIZO-MINI-BOT.git)
+$ cd RIZO-MINI-BOT
 
 # 2. Install dependencies
 $ npm install
