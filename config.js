@@ -10,7 +10,7 @@ module.exports = {
     // 1. CONFIGURATION DE BASE (Session & Database)
     // ===========================================================
     SESSION_ID: process.env.SESSION_ID || "MINI BOT", 
-    MONGODB_URI: process.env.MONGODB_URI || 'mongodb+srv://offarslan_db_user:arslanmd@cluster0.xrqkzwg.mongodb.net/?appName=Cluster0',
+    MONGODB_URI: process.env.MONGODB_URI || '', // Railway Variables me apna MongoDB URI daalo
     
     // ===========================================================
     // 2. INFORMATIONS DU BOT
@@ -67,8 +67,8 @@ module.exports = {
     // ===========================================================
     // 8. EXTERNAL API (Optionnel)
     // ===========================================================
-    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '8886508175:AAEwOAhSQMFTrDGknfXe7S2tJcOXW9pnwnk',
-    TELEGRAM_CHAT_ID: process.env.  TELEGRAM_CHAT_ID || '7638086103'
+    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
+    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || ''
     
 };
   

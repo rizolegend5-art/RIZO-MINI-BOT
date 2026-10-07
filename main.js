@@ -9,6 +9,7 @@ const {
     jidDecode,
     downloadContentFromMessage,
     getContentType,
+    fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
 const { arslanmd } = require('./lib/system');
 const config = require('./config');
@@ -86,12 +87,25 @@ const getGroupAdmins = (participants) => {
 };
 
 function isNumberAlreadyConnected(number) {
-    return activeSockets.has(number.replace(/[^0-9]/g, ''));
+    const s = activeSockets.get(number.replace(/[^0-9]/g, ''));
+    return !!(s && s.user);
 }
+
+function dropSocket(n) {
+    const s = activeSockets.get(n);
+    if (s) {
+        try { s.ev.removeAllListeners(); } catch (_) {}
+        try { s.ws.close(); } catch (_) {}
+    }
+    activeSockets.delete(n);
+    socketCreationTime.delete(n);
+}
+
+const restartCounts = new Map();
 
 function getConnectionStatus(number) {
     const n = number.replace(/[^0-9]/g, '');
-    const isConnected = activeSockets.has(n);
+    const isConnected = isNumberAlreadyConnected(n);
     const connectionTime = socketCreationTime.get(n);
     return {
         isConnected,
@@ -136,47 +150,52 @@ async function setupCallHandlers(socket, number) {
 }
 
 function setupAutoRestart(socket, number) {
-    let restartAttempts = 0;
     const maxRestartAttempts = 3;
+    const sanitizedNumber = number.replace(/[^0-9]/g, '');
 
     socket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            const statusCode = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode;
-            const errorMessage = lastDisconnect && lastDisconnect.error && lastDisconnect.error.message;
-            arslanLog(`Connection closed for ${number}: ${statusCode} - ${errorMessage}`, 'warning');
+        if (connection === 'open') { restartCounts.set(sanitizedNumber, 0); }
+        if (connection !== 'close') return;
 
-            if (statusCode === 401 || (errorMessage && errorMessage.includes('401'))) {
-                arslanLog(`Manual unlink detected for ${number}, cleaning up...`, 'warning');
-                const sanitizedNumber = number.replace(/[^0-9]/g, '');
-                activeSockets.delete(sanitizedNumber);
-                socketCreationTime.delete(sanitizedNumber);
-                await deleteSessionFromMongoDB(sanitizedNumber);
-                await removeNumberFromMongoDB(sanitizedNumber);
-                socket.ev.removeAllListeners();
-                return;
-            }
+        const statusCode = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode;
+        const errorMessage = lastDisconnect && lastDisconnect.error && lastDisconnect.error.message;
+        arslanLog(`Connection closed for ${number}: ${statusCode} - ${errorMessage}`, 'warning');
 
-            const isNormalError = statusCode === 408 || (errorMessage && errorMessage.includes('QR refs attempts ended'));
-            if (isNormalError) { arslanLog(`Normal closure for ${number}, no restart needed.`, 'info'); return; }
-
-            if (restartAttempts < maxRestartAttempts) {
-                restartAttempts++;
-                arslanLog(`Reconnecting ${number} (${restartAttempts}/${maxRestartAttempts}) in 10s...`, 'warning');
-                const sanitizedNumber = number.replace(/[^0-9]/g, '');
-                activeSockets.delete(sanitizedNumber);
-                socketCreationTime.delete(sanitizedNumber);
-                socket.ev.removeAllListeners();
-                await delay(10000);
-                try {
-                    const mockRes = { headersSent: false, send: () => {}, status: () => mockRes, setHeader: () => {}, json: () => {} };
-                    await arslanPair(number, mockRes);
-                } catch (e) { arslanLog(`Reconnection failed for ${number}: ${e.message}`, 'error'); }
-            } else {
-                arslanLog(`Max restart attempts reached for ${number}.`, 'error');
-            }
+        if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+            arslanLog(`Logged out / unlinked for ${number}, cleaning up...`, 'warning');
+            dropSocket(sanitizedNumber);
+            restartCounts.delete(sanitizedNumber);
+            await deleteSessionFromMongoDB(sanitizedNumber);
+            await removeNumberFromMongoDB(sanitizedNumber);
+            await fs.remove(path.join(__dirname, 'session', `session_${sanitizedNumber}`)).catch(() => {});
+            return;
         }
-        if (connection === 'open') { restartAttempts = 0; }
+
+        // Pairing code expired / QR timeout: free the slot so the user can retry
+        if (statusCode === 408 || (errorMessage && errorMessage.includes('QR refs attempts ended'))) {
+            arslanLog(`Pairing timed out for ${number}, slot freed.`, 'info');
+            dropSocket(sanitizedNumber);
+            return;
+        }
+
+        const attempts = (restartCounts.get(sanitizedNumber) || 0) + 1;
+        if (attempts > maxRestartAttempts) {
+            arslanLog(`Max restart attempts reached for ${number}.`, 'error');
+            dropSocket(sanitizedNumber);
+            restartCounts.delete(sanitizedNumber);
+            return;
+        }
+        restartCounts.set(sanitizedNumber, attempts);
+        // 515 = restartRequired: WhatsApp sends this right after a successful pairing
+        const wait = statusCode === DisconnectReason.restartRequired ? 1000 : 10000;
+        arslanLog(`Reconnecting ${number} (${attempts}/${maxRestartAttempts}) in ${wait / 1000}s...`, 'warning');
+        dropSocket(sanitizedNumber);
+        await delay(wait);
+        try {
+            const mockRes = { headersSent: false, send: () => {}, status: () => mockRes, setHeader: () => {}, json: () => {} };
+            await arslanPair(number, mockRes);
+        } catch (e) { arslanLog(`Reconnection failed for ${number}: ${e.message}`, 'error'); }
     });
 }
 
@@ -187,6 +206,10 @@ async function arslanPair(number, res = null) {
 
     try {
         const sessionPath = path.join(__dirname, 'session', `session_${sanitizedNumber}`);
+
+        if (activeSockets.has(sanitizedNumber) && !isNumberAlreadyConnected(sanitizedNumber)) {
+            dropSocket(sanitizedNumber); // leftover from an unfinished pairing
+        }
 
         if (isNumberAlreadyConnected(sanitizedNumber)) {
             const status = getConnectionStatus(sanitizedNumber);
@@ -206,23 +229,35 @@ async function arslanPair(number, res = null) {
         // Check MongoDB session
         const existingSession = await getSessionFromMongoDB(sanitizedNumber);
 
-        if (!existingSession) {
-            arslanLog(`No MongoDB session for ${sanitizedNumber} — new pairing required`, 'info');
-            if (fs.existsSync(sessionPath)) {
-                await fs.remove(sessionPath);
-                arslanLog(`Cleaned leftover local session for ${sanitizedNumber}`, 'info');
+        const localCredsPath = path.join(sessionPath, 'creds.json');
+        let localRegistered = false;
+        if (fs.existsSync(localCredsPath)) {
+            try { localRegistered = !!JSON.parse(fs.readFileSync(localCredsPath, 'utf8')).registered; } catch (_) {}
+        }
+
+        if (localRegistered) {
+            arslanLog(`Using local session for ${sanitizedNumber}`, 'info');
+            if (!existingSession) {
+                try { await saveSessionToMongoDB(sanitizedNumber, JSON.parse(fs.readFileSync(localCredsPath, 'utf8'))); } catch (_) {}
             }
-        } else {
-            // Session exists - restore from MongoDB
+        } else if (existingSession) {
             fs.ensureDirSync(sessionPath);
-            fs.writeFileSync(path.join(sessionPath, 'creds.json'), JSON.stringify(existingSession, null, 2));
-            arslanLog(`🔄 Restored existing session from MongoDB for ${sanitizedNumber}`, 'success');
+            fs.writeFileSync(localCredsPath, JSON.stringify(existingSession, null, 2));
+            arslanLog(`Restored session from MongoDB for ${sanitizedNumber}`, 'success');
+        } else {
+            arslanLog(`No session for ${sanitizedNumber} — new pairing required`, 'info');
+            if (fs.existsSync(sessionPath)) await fs.remove(sessionPath);
         }
 
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
         const logger = pino({ level: process.env.NODE_ENV === 'production' ? 'fatal' : 'debug' });
 
         const arslanStore = createarslanStore();
+
+        let waVersion;
+        try { waVersion = (await fetchLatestBaileysVersion()).version; }
+        catch (_) { waVersion = [2, 3000, 1033105955]; }
+        arslanLog(`Using WA version ${waVersion.join('.')}`, 'info');
 
         const conn = makeWASocket({
             auth: {
@@ -231,16 +266,16 @@ async function arslanPair(number, res = null) {
             },
             printQRInTerminal: false,
             logger: pino({ level: "silent" }),
-            version: [2, 3000, 1033105955],
+            version: waVersion,
             connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 0,
             keepAliveIntervalMs: 10000,
             emitOwnEvents: true,
             fireInitQueries: true,
             generateHighQualityLinkPreview: true,
-            syncFullHistory: true,
+            syncFullHistory: false,
             markOnlineOnConnect: true,
-            browser: ['Mac OS', 'Safari', '10.15.7'],
+            browser: Browsers.ubuntu('Chrome'),
             getMessage: async (key) => {
                 const msg = await arslanStore.loadMessage(key.remoteJid, key.id);
                 return msg && msg.message ? msg.message : { conversation: 'RIZO-MD' };
@@ -480,8 +515,8 @@ router.get('/code', async (req, res) => { if (!req.query.number) return res.json
 router.get('/status', async (req, res) => {
     const { number } = req.query;
     if (!number) {
-        const list = Array.from(activeSockets.keys()).map(n => { const s = getConnectionStatus(n); return { number: n, status: 'connected', connectionTime: s.connectionTime, uptime: `${s.uptime} seconds` }; });
-        return res.json({ totalActive: activeSockets.size, connections: list });
+        const list = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected).map(n => { const s = getConnectionStatus(n); return { number: n, status: 'connected', connectionTime: s.connectionTime, uptime: `${s.uptime} seconds` }; });
+        return res.json({ totalActive: list.length, connections: list });
     }
     const s = getConnectionStatus(number);
     res.json({ number, isConnected: s.isConnected, connectionTime: s.connectionTime, uptime: `${s.uptime} seconds` });
@@ -499,7 +534,7 @@ router.get('/disconnect', async (req, res) => {
         res.json({ status: 'success', message: 'Disconnected' });
     } catch (e) { res.status(500).json({ error: 'Failed to disconnect' }); }
 });
-router.get('/active', (req, res) => res.json({ count: activeSockets.size, numbers: Array.from(activeSockets.keys()) }));
+router.get('/active', (req, res) => { const nums = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected); res.json({ count: nums.length, numbers: nums }); });
 router.get('/ping', (req, res) => res.json({ status: 'active', message: 'RIZO-md is running 🔥', activeSessions: activeSockets.size }));
 router.get('/connect-all', async (req, res) => {
     try {
@@ -507,7 +542,7 @@ router.get('/connect-all', async (req, res) => {
         if (!numbers.length) return res.status(404).json({ error: 'No numbers found' });
         const results = [];
         for (const number of numbers) {
-            if (activeSockets.has(number)) { results.push({ number, status: 'already_connected' }); continue; }
+            if (isNumberAlreadyConnected(number)) { results.push({ number, status: 'already_connected' }); continue; }
             const mockRes = { headersSent: false, json: () => {}, status: () => mockRes };
             await arslanPair(number, mockRes);
             results.push({ number, status: 'connection_initiated' });
@@ -560,7 +595,7 @@ async function autoReconnectFromMongoDB() {
         const numbers = await getAllNumbersFromMongoDB();
         if (!numbers.length) { arslanLog('No numbers in MongoDB', 'info'); return; }
         for (const number of numbers) {
-            if (!activeSockets.has(number)) {
+            if (!isNumberAlreadyConnected(number)) {
                 const mockRes = { headersSent: false, json: () => {}, status: () => mockRes };
                 await arslanPair(number, mockRes);
                 await delay(2000);
