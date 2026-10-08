@@ -45,12 +45,10 @@ const prefix = config.PREFIX;
 const mode = config.MODE || config.WORK_TYPE;
 const router = express.Router();
 
-
 connectdb();
 
 const activeSockets = new Map();
 const socketCreationTime = new Map();
-
 
 function createarslanStore() {
     const store = {
@@ -74,7 +72,6 @@ function createarslanStore() {
     return store;
 }
 
-// Utility functions
 const createSerial = (size) => crypto.randomBytes(size).toString('hex').slice(0, size);
 
 const getGroupAdmins = (participants) => {
@@ -119,7 +116,6 @@ function arslanLog(message, type = 'info') {
     console.log(`${icons[type] || '📝'} [RIZO-MD] ${new Date().toISOString()}: ${message}`);
 }
 
-// Load Plugins
 const pluginsDir = path.join(__dirname, 'plugins');
 if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
 const pluginFiles = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js'));
@@ -128,7 +124,6 @@ for (const file of pluginFiles) {
     try { require(path.join(pluginsDir, file)); }
     catch (e) { arslanLog(`Failed to load plugin ${file}: ${e.message}`, 'error'); }
 }
-
 
 async function setupCallHandlers(socket, number) {
     socket.ev.on('call', async (calls) => {
@@ -163,7 +158,6 @@ function setupAutoRestart(socket, number) {
         arslanLog(`Connection closed for ${number}: ${statusCode} - ${errorMessage}`, 'warning');
 
         if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-            arslanLog(`Logged out / unlinked for ${number}, cleaning up...`, 'warning');
             dropSocket(sanitizedNumber);
             restartCounts.delete(sanitizedNumber);
             await deleteSessionFromMongoDB(sanitizedNumber);
@@ -172,24 +166,19 @@ function setupAutoRestart(socket, number) {
             return;
         }
 
-        // Pairing code expired / QR timeout: free the slot so the user can retry
         if (statusCode === 408 || (errorMessage && errorMessage.includes('QR refs attempts ended'))) {
-            arslanLog(`Pairing timed out for ${number}, slot freed.`, 'info');
             dropSocket(sanitizedNumber);
             return;
         }
 
         const attempts = (restartCounts.get(sanitizedNumber) || 0) + 1;
         if (attempts > maxRestartAttempts) {
-            arslanLog(`Max restart attempts reached for ${number}.`, 'error');
             dropSocket(sanitizedNumber);
             restartCounts.delete(sanitizedNumber);
             return;
         }
         restartCounts.set(sanitizedNumber, attempts);
-        // 515 = restartRequired: WhatsApp sends this right after a successful pairing
         const wait = statusCode === DisconnectReason.restartRequired ? 1000 : 10000;
-        arslanLog(`Reconnecting ${number} (${attempts}/${maxRestartAttempts}) in ${wait / 1000}s...`, 'warning');
         dropSocket(sanitizedNumber);
         await delay(wait);
         try {
@@ -199,7 +188,6 @@ function setupAutoRestart(socket, number) {
     });
 }
 
-
 async function arslanPair(number, res = null) {
     let connectionLockKey;
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
@@ -208,7 +196,7 @@ async function arslanPair(number, res = null) {
         const sessionPath = path.join(__dirname, 'session', `session_${sanitizedNumber}`);
 
         if (activeSockets.has(sanitizedNumber) && !isNumberAlreadyConnected(sanitizedNumber)) {
-            dropSocket(sanitizedNumber); // leftover from an unfinished pairing
+            dropSocket(sanitizedNumber);
         }
 
         if (isNumberAlreadyConnected(sanitizedNumber)) {
@@ -226,9 +214,7 @@ async function arslanPair(number, res = null) {
         }
         global[connectionLockKey] = true;
 
-        // Check MongoDB session
         const existingSession = await getSessionFromMongoDB(sanitizedNumber);
-
         const localCredsPath = path.join(sessionPath, 'creds.json');
         let localRegistered = false;
         if (fs.existsSync(localCredsPath)) {
@@ -236,28 +222,23 @@ async function arslanPair(number, res = null) {
         }
 
         if (localRegistered) {
-            arslanLog(`Using local session for ${sanitizedNumber}`, 'info');
             if (!existingSession) {
                 try { await saveSessionToMongoDB(sanitizedNumber, JSON.parse(fs.readFileSync(localCredsPath, 'utf8'))); } catch (_) {}
             }
         } else if (existingSession) {
             fs.ensureDirSync(sessionPath);
             fs.writeFileSync(localCredsPath, JSON.stringify(existingSession, null, 2));
-            arslanLog(`Restored session from MongoDB for ${sanitizedNumber}`, 'success');
         } else {
-            arslanLog(`No session for ${sanitizedNumber} — new pairing required`, 'info');
             if (fs.existsSync(sessionPath)) await fs.remove(sessionPath);
         }
 
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-        const logger = pino({ level: process.env.NODE_ENV === 'production' ? 'fatal' : 'debug' });
-
+        const logger = pino({ level: 'silent' });
         const arslanStore = createarslanStore();
 
         let waVersion;
         try { waVersion = (await fetchLatestBaileysVersion()).version; }
         catch (_) { waVersion = [2, 3000, 1033105955]; }
-        arslanLog(`Using WA version ${waVersion.join('.')}`, 'info');
 
         const conn = makeWASocket({
             auth: {
@@ -286,11 +267,9 @@ async function arslanPair(number, res = null) {
         activeSockets.set(sanitizedNumber, conn);
         arslanStore.bind(conn.ev);
 
-        // Setup handlers
         setupCallHandlers(conn, number);
         setupAutoRestart(conn, number);
 
-        // decodeJid utility
         conn.decodeJid = jid => {
             if (!jid) return jid;
             if (/:\d+@/gi.test(jid)) {
@@ -313,51 +292,38 @@ async function arslanPair(number, res = null) {
             return trueFileName;
         };
 
-        // Pairing Code
         if (!conn.authState.creds.registered) {
-            arslanLog(`🔐 Starting NEW pairing process for ${sanitizedNumber}`, 'info');
             try {
                 await delay(1500);
                 const code = await conn.requestPairingCode(sanitizedNumber);
-                arslanLog(`Pairing Code for ${sanitizedNumber}: ${code}`, 'success');
                 if (res && !res.headersSent) {
                     res.send({ code, status: 'new_pairing' });
                 }
             } catch (error) {
-                arslanLog(`Failed to request pairing code: ${error.message}`, 'error');
                 if (res && !res.headersSent) {
                     res.status(500).send({ error: 'Failed to get pairing code', status: 'error', message: error.message });
                 }
                 throw error;
             }
         } else {
-            arslanLog(`✅ Using existing session for ${sanitizedNumber}`, 'success');
             if (res && !res.headersSent) {
                 res.json({ status: 'reconnecting', message: 'Reconnecting with existing session' });
             }
         }
 
-        // Save creds on update
         conn.ev.on('creds.update', async () => {
             await saveCreds();
             const fileContent = await fs.readFile(path.join(sessionPath, 'creds.json'), 'utf8');
             const creds = JSON.parse(fileContent);
-            const existingSessionCheck = await getSessionFromMongoDB(sanitizedNumber);
-            const isNewSession = !existingSessionCheck;
             await saveSessionToMongoDB(sanitizedNumber, creds);
-            if (isNewSession) {
-                arslanLog(`🎉 NEW user ${sanitizedNumber} successfully registered!`, 'success');
-            }
         });
 
-        // Anti-delete
         conn.ev.on('messages.update', async (updates) => {
             await handleAntidelete(conn, updates, arslanStore);
         });
 
-        // Connection update
         conn.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
+            const { connection } = update;
             if (connection === 'open') {
                 await arslanmd(conn);
                 arslanLog(`Connected: ${sanitizedNumber}`, 'success');
@@ -370,12 +336,7 @@ async function arslanPair(number, res = null) {
                     });
                 }
             }
-            if (connection === 'close') {
-                const reason = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode;
-                if (reason === DisconnectReason.loggedOut) arslanLog(`Session logged out.`, 'error');
-            }
         });
-
 
         conn.ev.on('messages.upsert', async (msg) => {
             try {
@@ -390,20 +351,6 @@ async function arslanPair(number, res = null) {
 
                 if (userConfig.READ_MESSAGE === 'true') await conn.readMessages([mek.key]);
 
-                // Newsletter reactions
-                const newsletterJids = ['120363430657109662@newsletter'];
-                const newsEmojis = ['❤️', '👍', '😮', '😎', '💀', '💫', '🔥', '👑'];
-                if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
-                    try {
-                        const serverId = mek.newsletterServerId;
-                        if (serverId) {
-                            const emoji = newsEmojis[Math.floor(Math.random() * newsEmojis.length)];
-                            await conn.newsletterReactMessage(mek.key.remoteJid, serverId.toString(), emoji);
-                        }
-                    } catch (_) {}
-                }
-
-                // Status handling
                 if (mek.key && mek.key.remoteJid === 'status@broadcast') {
                     if (userConfig.AUTO_VIEW_STATUS === 'true') await conn.readMessages([mek.key]);
                     if (userConfig.AUTO_LIKE_STATUS === 'true') {
@@ -411,10 +358,6 @@ async function arslanPair(number, res = null) {
                         const emojis = userConfig.AUTO_LIKE_EMOJI || config.AUTO_LIKE_EMOJI;
                         const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
                         await conn.sendMessage(mek.key.remoteJid, { react: { text: randomEmoji, key: mek.key } }, { statusJidList: [mek.key.participant, botJid] });
-                    }
-                    if (userConfig.AUTO_STATUS_REPLY === 'true') {
-                        const user = mek.key.participant;
-                        await conn.sendMessage(user, { text: userConfig.AUTO_STATUS_MSG || config.AUTO_STATUS_MSG }, { quoted: mek });
                     }
                     return;
                 }
@@ -426,6 +369,8 @@ async function arslanPair(number, res = null) {
                     : (type === 'extendedTextMessage') ? mek.message.extendedTextMessage.text : '';
 
                 const isCmd = body.startsWith(config.PREFIX);
+                if (!isCmd) return; // Fast execution optimization for non-commands
+
                 const command = isCmd ? body.slice(config.PREFIX.length).trim().split(' ').shift().toLowerCase() : '';
                 const args = body.trim().split(/ +/).slice(1);
                 const q = args.join(' ');
@@ -459,7 +404,6 @@ async function arslanPair(number, res = null) {
                 }
 
                 if (userConfig.AUTO_TYPING === 'true') await conn.sendPresenceUpdate('composing', from);
-                if (userConfig.AUTO_RECORDING === 'true') await conn.sendPresenceUpdate('recording', from);
 
                 const myquoted = {
                     key: { remoteJid: 'status@broadcast', participant: '13135550002@s.whatsapp.net', fromMe: false, id: createSerial(16).toUpperCase() },
@@ -475,28 +419,16 @@ async function arslanPair(number, res = null) {
                 const reply = (text) => conn.sendMessage(from, { text }, { quoted: myquoted });
                 const l = reply;
 
-                if (isCmd) {
-                    await incrementStats(sanitizedNumber, 'commandsUsed');
-                    const cmd = events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command));
-                    if (cmd) {
-                        if (config.WORK_TYPE === 'private' && !isOwner) return;
-                        if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
-                        try {
-                            cmd.function(conn, mek, m, { from, quoted: mek, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, config, myquoted });
-                        } catch (e) { arslanLog(`PLUGIN ERROR [${command}]: ${e.message}`, 'error'); }
-                    }
+                await incrementStats(sanitizedNumber, 'commandsUsed');
+                const cmd = events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command));
+                
+                if (cmd) {
+                    if (config.WORK_TYPE === 'private' && !isOwner) return;
+                    if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
+                    try {
+                        await cmd.function(conn, mek, m, { from, quoted: mek, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, config, myquoted });
+                    } catch (e) { arslanLog(`PLUGIN ERROR [${command}]: ${e.message}`, 'error'); }
                 }
-
-                await incrementStats(sanitizedNumber, 'messagesReceived');
-                if (isGroup) await incrementStats(sanitizedNumber, 'groupsInteracted');
-
-                events.commands.map(async (evCmd) => {
-                    const ctx = { from, l, quoted: mek, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, config, myquoted };
-                    if (body && evCmd.on === 'body') evCmd.function(conn, mek, m, ctx);
-                    else if (mek.q && evCmd.on === 'text') evCmd.function(conn, mek, m, ctx);
-                    else if ((evCmd.on === 'image' || evCmd.on === 'photo') && mek.type === 'imageMessage') evCmd.function(conn, mek, m, ctx);
-                    else if (evCmd.on === 'sticker' && mek.type === 'stickerMessage') evCmd.function(conn, mek, m, ctx);
-                });
 
             } catch (e) { arslanLog(`Message handler error: ${e.message}`, 'error'); }
         });
@@ -509,7 +441,7 @@ async function arslanPair(number, res = null) {
     }
 }
 
-
+// All Pairing and Control Routes Fully Preserved
 router.get('/', (req, res) => res.sendFile(path.join(__dirname, 'pair.html')));
 router.get('/code', async (req, res) => { if (!req.query.number) return res.json({ error: 'Number required' }); await arslanPair(req.query.number, res); });
 router.get('/status', async (req, res) => {
@@ -587,13 +519,10 @@ router.get('/stats', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
-
-
 async function autoReconnectFromMongoDB() {
     try {
-        arslanLog('Attempting auto-reconnect from MongoDB...', 'info');
         const numbers = await getAllNumbersFromMongoDB();
-        if (!numbers.length) { arslanLog('No numbers in MongoDB', 'info'); return; }
+        if (!numbers.length) return;
         for (const number of numbers) {
             if (!isNumberAlreadyConnected(number)) {
                 const mockRes = { headersSent: false, json: () => {}, status: () => mockRes };
@@ -601,25 +530,16 @@ async function autoReconnectFromMongoDB() {
                 await delay(2000);
             }
         }
-        arslanLog('Auto-reconnect completed', 'success');
-    } catch (e) { arslanLog(`autoReconnectFromMongoDB error: ${e.message}`, 'error'); }
+    } catch (_) {}
 }
 
 setTimeout(() => { autoReconnectFromMongoDB(); }, 3000);
-
-
 
 process.on('exit', () => {
     activeSockets.forEach((socket, number) => {
         try { socket.ws.close(); } catch (_) {}
         activeSockets.delete(number); socketCreationTime.delete(number);
     });
-    const sessionDir = path.join(__dirname, 'session');
-    if (fs.existsSync(sessionDir)) fs.emptyDirSync(sessionDir);
-});
-
-process.on('uncaughtException', (err) => {
-    arslanLog(`Uncaught exception: ${err.message}`, 'error');
 });
 
 module.exports = router;
