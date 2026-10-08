@@ -8,35 +8,30 @@ cmd({
     desc: "Fetch and display all available bot commands",
     category: "system",
     filename: __filename,
-}, async (conn, mek, m, { reply, config }) => {
+}, async (conn, mek, m, { reply }) => {
     try {
-        const prefix = config.PREFIX;
         let totalCommands = 0;
         let grouped = {};
 
         // Group commands by category
+        const seen = new Set();
         for (const cmd of commands) {
-            if (!cmd.pattern || !cmd.category) continue;
+            if (!cmd.pattern || !cmd.category || cmd.dontAddCommandList) continue;
+
+            const key = `${String(cmd.category).toLowerCase()}:${String(cmd.pattern).toLowerCase()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
 
             totalCommands++;
             if (!grouped[cmd.category]) grouped[cmd.category] = [];
             grouped[cmd.category].push(cmd.pattern);
         }
 
-        const catIcons = {
-            main: "⚡", system: "🖥️", settings: "⚙️", owner: "👑",
-            download: "📥", downloader: "📥", search: "🔎", group: "👥",
-            admin: "🛡️", sticker: "🖼️", tools: "🧰", general: "✨",
-            misc: "🔹"
-        };
-
-        const order = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
-
         let menuText = "";
-        for (const cat of order) {
-            const icon = catIcons[cat] || "🔸";
-            menuText += `\n┌─❖ ${icon} *${cat.toUpperCase()}*\n`;
-            menuText += grouped[cat].map(c => `│ ◦ ${prefix}${c}`).join("\n") + "\n└─────────────────\n";
+        for (const cat of Object.keys(grouped).sort()) {
+            grouped[cat].sort((a, b) => a.localeCompare(b));
+            menuText += `\n🧚‍♀️ *${cat.toUpperCase()}*\n`;
+            menuText += grouped[cat].map(c => `💫 ${c}`).join("\n") + "\n";
         }
 
         const time = moment().tz("Africa/Kampala").format("HH:mm:ss");
@@ -46,13 +41,12 @@ cmd({
 ╭━━━《 *RIZO-ᴍᴅ* 》━━━┈⊷
 ┃ ✦╭─────────────┈⊷
 ┃ ✦│▸ Total Commands : *${totalCommands}*
-┃ ✦│▸ Prefix         : *${prefix}*
 ┃ ✦│▸ Time           : ${time}
 ┃ ✦│▸ Date           : ${date}
+┃ ✦│▸ Platform       : rizoxmd.vercal.com
 ┃ ✦╰─────────────┈⊷
 ╰━━━━━━━━━━━━┈⊷
 ${menuText}
-*© Powered by RIZO-MD*
 `.trim();
 
         await conn.sendMessage(m.chat, {
