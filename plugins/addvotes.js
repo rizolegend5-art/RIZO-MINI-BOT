@@ -1,14 +1,8 @@
-// plugins/addvotes.js
-const { cmd } = require("../arslan");
-
-
 let handler = async (m, { conn, text, usedPrefix, command }) => {
-    // Format: .addvotes <poll_link> <option_name> <amount>
-    // Misaal: .addvotes https://whatsapp.com/xyz Ali 500
     let args = text ? text.trim().split(' ') : [];
     
     let pollLink = args[0] ? args[0].trim() : null;
-    let voteOption = args[1] ? args[1].trim() : null; // Ab yahan koi bhi naam ho sakta hai (e.g. Ali)
+    let voteOption = args[1] ? args[1].trim() : null;
     let customCount = args[2] ? parseInt(args[2]) : null;
 
     if (!pollLink || !voteOption || !customCount || isNaN(customCount)) {
@@ -31,15 +25,12 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     let pollTarget = dbData.polls[pollLink];
 
-    // Agar option name pehle se database mein nahi hai toh naya bana do
     if (pollTarget.options[voteOption] === undefined) {
         pollTarget.options[voteOption] = 0;
     }
 
-    // Votes add kar dein
     pollTarget.options[voteOption] += customCount;
 
-    // Tamam options ke results ki list tayar karna
     let optionsList = "";
     for (let opt in pollTarget.options) {
         optionsList += `- *${opt}*: ${pollTarget.options[opt]} Votes\n`;

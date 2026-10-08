@@ -1,5 +1,3 @@
-// plugins/rizoinvis.js
-const { cmd } = require("../arslan");
 let { HardInvis } = require('../lib/rizoinvis');
 
 let handler = async (m, { conn, args, command, isCreator }) => {
@@ -25,13 +23,8 @@ let handler = async (m, { conn, args, command, isCreator }) => {
     await m.reply(`👻 *HardInvis Target Locked:* ${pepec}\n⚡ *Spamming Invisible Payload with Error Control...*`);
 
     try {
-        // Background ya sequential execution ke liye call kar rahe hain
         await HardInvis(conn, target);
-
-        await conn.sendMessage(m.chat, {
-            react: { text: "👻", key: m.key }
-        });
-
+        await conn.sendMessage(m.chat, { react: { text: "👻", key: m.key } });
     } catch (error) {
         console.error("Plugin Error:", error);
         m.reply("⚠️ Error: HardInvis plugin execute karte waqt masla aaya hai.");

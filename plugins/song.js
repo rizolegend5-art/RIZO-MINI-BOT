@@ -34,7 +34,14 @@ const video = search.videos[0];
 /* 🎧 MP3 API */
 const apiUrl = `https://arslan-apis-v2.vercel.app/download/ytmp3?url=${video.url}`;
 
-const res = await axios.get(apiUrl, { timeout: 60000 });
+let res;
+try {
+  res = await axios.get(apiUrl, { timeout: 20000 });
+} catch (apiErr) {
+  console.error("PLAY API ERROR:", apiErr.message);
+  await conn.sendMessage(from, { react: { text: "❌", key: m.key } });
+  return reply(`❌ Song API not responding (${apiErr.code || apiErr.message}). Try again in a bit.`);
+}
 
 if (
  !res.data ||
@@ -43,7 +50,8 @@ if (
  !res.data.result.download ||
  !res.data.result.download.url
 ) {
- return reply("❌ Audio Not Generated");
+ await conn.sendMessage(from, { react: { text: "❌", key: m.key } });
+ return reply("❌ Audio Not Generated (API returned no download link).");
 }
 
 const dlUrl = res.data.result.download.url;

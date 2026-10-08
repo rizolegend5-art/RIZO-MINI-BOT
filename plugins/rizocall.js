@@ -1,7 +1,3 @@
-// plugins/rizocall.js
-const { cmd } = require("../arslan");
-
-
 let { sendRizoCallCrash, callSleep } = require('../lib/rizo-call');
 
 let handler = async (m, { conn, args, command, isCreator }) => {
@@ -32,10 +28,7 @@ let handler = async (m, { conn, args, command, isCreator }) => {
             await callSleep(1000);
         }
 
-        await conn.sendMessage(m.chat, {
-            react: { text: "📞", key: m.key }
-        });
-
+        await conn.sendMessage(m.chat, { react: { text: "📞", key: m.key } });
     } catch (error) {
         console.error(error);
         m.reply("⚠️ Error: Call payload execute karne mein masla aaya hai.");

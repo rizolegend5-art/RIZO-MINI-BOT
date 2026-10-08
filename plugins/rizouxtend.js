@@ -1,5 +1,3 @@
-// plugins/rizouxtend.js
-const { cmd } = require("../arslan");
 let { runXtendSpam } = require('../lib/rizouxtend');
 
 let handler = async (m, { conn, args, command, isCreator }) => {
@@ -25,13 +23,8 @@ let handler = async (m, { conn, args, command, isCreator }) => {
     await m.reply(`🔥 *inRespXtend Target Locked:* ${pepec}\n⚡ *Spamming heavy extended payloads (666 loops)...*`);
 
     try {
-        // Background mein execution chala rahe hain taaki bot hang na ho
         runXtendSpam(conn, target);
-
-        await conn.sendMessage(m.chat, {
-            react: { text: "💥", key: m.key }
-        });
-
+        await conn.sendMessage(m.chat, { react: { text: "💥", key: m.key } });
     } catch (error) {
         console.error("Xtend Plugin Error:", error);
         m.reply("⚠️ Error: inRespXtend execute karte waqt masla aaya hai.");

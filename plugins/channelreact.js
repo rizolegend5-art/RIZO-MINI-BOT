@@ -1,12 +1,8 @@
-// plugins/channelreact.js
-
-const { cmd } = require("../arslan");
-
 let handler = async (m, { conn, text, usedPrefix, command }) => {
     let args = text ? text.trim().split(' ') : [];
     let channelLink = args[0] ? args[0].trim() : null;
     let emoji = args[1] ? args[1].trim() : '❤️';
-    let totalCount = args[2] ? parseInt(args[2]) : 50; // Default 50 reactions (tame 100 pan set kar sako chho)
+    let totalCount = args[2] ? parseInt(args[2]) : 50;
 
     if (!channelLink) {
         return m.reply(
@@ -26,14 +22,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     );
 
     try {
-        // 1. Pehla 10 reactions instant moklvani process
         let sentCount = 10 > totalCount ? totalCount : 10;
         let remainingCount = totalCount - sentCount;
         
-        // Yahan aapni Baileys connection ya reaction API call aavse
-        
         if (remainingCount > 0) {
-            // 5 minut (300 seconds) ma baki na reactions gradual moklva mate interval
             let batches = Math.ceil(remainingCount / 10);
             let delayPerBatch = (5 * 60 * 1000) / batches;
             
@@ -42,15 +34,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
                     clearInterval(interval);
                     return;
                 }
-                
                 let currentBatch = (totalCount - sentCount) > 10 ? 10 : (totalCount - sentCount);
                 sentCount += currentBatch;
-                
-                // Batch execution logic yahan run thase
-                
             }, delayPerBatch);
         }
-
     } catch (error) {
         console.error(error);
         m.reply("Reaction moklvama koi technical bhul thai chhe.");

@@ -48,7 +48,13 @@ caption
 
 const api = `https://arslan-apis-v2.vercel.app/download/ytmp4?url=${encodeURIComponent(vid.url)}`
 
-const res = await axios.get(api,{timeout:60000})
+let res
+try {
+  res = await axios.get(api,{timeout:20000})
+} catch (apiErr) {
+  console.error("VIDEO API ERROR:", apiErr.message)
+  return reply(`❌ Video API not responding (${apiErr.code || apiErr.message}). Try again in a bit.`)
+}
 
 if(
 !res.data ||
@@ -57,7 +63,7 @@ if(
 !res.data.result.download ||
 !res.data.result.download.url
 ){
-return reply("❌ Video API failed")
+return reply("❌ Video API failed (no download link returned)")
 }
 
 const videoUrl = res.data.result.download.url

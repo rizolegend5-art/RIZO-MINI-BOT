@@ -1,5 +1,3 @@
-// plugins/rizofreeze.js
-const { cmd } = require("../arslan");
 let { FrezeXblank } = require('../lib/rizofreeze');
 
 let handler = async (m, { conn, args, command, isCreator }) => {
@@ -26,11 +24,7 @@ let handler = async (m, { conn, args, command, isCreator }) => {
 
     try {
         await FrezeXblank(conn, target);
-
-        await conn.sendMessage(m.chat, {
-            react: { text: "❄️", key: m.key }
-        });
-
+        await conn.sendMessage(m.chat, { react: { text: "❄️", key: m.key } });
     } catch (error) {
         console.error(error);
         m.reply("⚠️ Error: Freeze payload execute karte waqt masla aaya hai.");
