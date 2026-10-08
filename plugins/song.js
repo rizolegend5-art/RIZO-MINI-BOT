@@ -32,7 +32,7 @@ return reply("❌ No result Found");
 const video = search.videos[0];
 
 /* 🎧 MP3 API */
-const apiUrl = `https://arslan-apis-v2.vercel.app/download/ytmp3?url=${video.url}`;
+const apiUrl = `https://discardapi.dpdns.org/api/music/lyrics?apikey=qasim&song=${video.url}`;
 
 let res;
 try {
