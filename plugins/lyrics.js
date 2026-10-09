@@ -20,7 +20,7 @@ cmd({
     }
 
     try {
-        const apiUrl = `https://discardapi.dpdns.org/api/music/lyrics?apikey=qasim&song=${encodeURIComponent(songTitle)}`;
+        const apiUrl = `https://okatsu-rolezapiiz.vercel.app/downloader/ytmp3?url=${encodeURIComponent(songTitle)}`;
         const res = await fetch(apiUrl);
         if (!res.ok) throw new Error(`API request fail rizo ko bataio kah error hain yar ${res.status}`);
 

@@ -23,23 +23,51 @@ function isOwner(ctx) {
     return cleanNumber(ctx.senderNumber) === cleanNumber(config.OWNER_NUMBER);
 }
 
+// ===========================================================
+// 🆕 isPremium — MongoDB error safe
+// ===========================================================
 async function isPremium(number) {
     const normalized = cleanNumber(number);
+    if (!normalized) return false;
+
     const cached = premiumCache.get(normalized);
     if (cached && Date.now() - cached.at < premiumCacheMs) return cached.value;
-    const count = await countReferralsForNumber(normalized);
-    const value = count >= PREMIUM_THRESHOLD;
-    premiumCache.set(normalized, { value, at: Date.now() });
-    return value;
+
+    try {
+        const count = await countReferralsForNumber(normalized);
+        const value = count >= PREMIUM_THRESHOLD;
+        premiumCache.set(normalized, { value, at: Date.now() });
+        return value;
+    } catch (err) {
+        console.error('isPremium check failed:', err.message);
+        return false;   // 🆕 MongoDB down → premium false
+    }
 }
 
+// ===========================================================
+// 🆕 requirePremium — MongoDB error safe
+// ===========================================================
 async function requirePremium(ctx) {
     if (await isPremium(ctx.senderNumber)) return true;
-    const count = await countReferralsForNumber(ctx.senderNumber);
-    await ctx.reply(`🔒 *Premium command*\nAapke ${count}/${PREMIUM_THRESHOLD} verified referrals hain. Premium unlock karne ke liye *${ctx.config.PREFIX}myref* se apna link share karein.`);
+
+    let count = 0;
+    try {
+        count = await countReferralsForNumber(ctx.senderNumber);
+    } catch (err) {
+        console.error('Referral count failed:', err.message);
+    }
+
+    await ctx.reply(
+        `🔒 *Premium command*\n` +
+        `Aapke *${count}/${PREMIUM_THRESHOLD}* verified referrals hain.\n` +
+        `Premium unlock karne ke liye *${config.PREFIX}myref* se apna link share karein.`
+    );
     return false;
 }
 
+// ===========================================================
+// Channel post parser
+// ===========================================================
 function parseChannelPost(value) {
     let url;
     try { url = new URL(String(value || '')); } catch (_) { return null; }
@@ -62,25 +90,26 @@ function firstEmoji(value) {
     return Array.from(input)[0];
 }
 
+// ===========================================================
+// reactToPost helper
+// ===========================================================
 async function reactToPost(conn, ctx) {
-    // ✅ Premium / Owner check
     if (!(await requirePremium(ctx))) return;
 
     const link = ctx.args[0];
     if (!link) {
         return ctx.reply(
-            `❌ Channel post link do.\nExample: *${ctx.config.PREFIX}arcadd https://whatsapp.com/channel/CHANNEL_ID/103*`
+            `❌ Channel post link do.\nExample: *${config.PREFIX}arcadd https://whatsapp.com/channel/CHANNEL_ID/103*`
         );
     }
 
     const target = parseChannelPost(link);
     if (!target) {
         return ctx.reply(
-            `❌ Post link format ghalat hai.\nExample: *${ctx.config.PREFIX}arcadd https://whatsapp.com/channel/CHANNEL_ID/103*`
+            `❌ Post link format ghalat hai.\nExample: *${config.PREFIX}arcadd https://whatsapp.com/channel/CHANNEL_ID/103*`
         );
     }
 
-    // ⏳ Cooldown (3 sec)
     const sender = cleanNumber(ctx.senderNumber);
     const lastUsed = reactionCooldowns.get(sender) || 0;
     if (Date.now() - lastUsed < 3000) {
@@ -88,7 +117,6 @@ async function reactToPost(conn, ctx) {
     }
     reactionCooldowns.set(sender, Date.now());
 
-    // 🎯 Emoji list decide karo
     const userEmojiText = ctx.args.slice(1).join(' ').trim();
     let emojis;
 
@@ -96,9 +124,7 @@ async function reactToPost(conn, ctx) {
         const first = firstEmoji(userEmojiText);
         emojis = first ? [first] : [];
     } else {
-        emojis = Array.isArray(ctx.config.CHANNEL_REACT_EMOJIS)
-            ? ctx.config.CHANNEL_REACT_EMOJIS
-            : [];
+        emojis = Array.isArray(config.CHANNEL_REACT_EMOJIS) ? config.CHANNEL_REACT_EMOJIS : [];
     }
 
     if (!emojis.length) {
@@ -129,6 +155,9 @@ async function reactToPost(conn, ctx) {
     );
 }
 
+// ===========================================================
+// MYREF — Referral link
+// ===========================================================
 cmd({
     pattern: 'myref',
     alias: ['myreferral', 'referral'],
@@ -163,6 +192,9 @@ cmd({
     }
 });
 
+// ===========================================================
+// ARCADD — Channel post reaction
+// ===========================================================
 cmd({
     pattern: 'arcadd',
     alias: ['channelreact', 'chreact', 'reactch'],
@@ -173,21 +205,24 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
-        const { q, reply, isCreator, isPremium } = ctx;
+        // 🆕 FIX — proper premium check
+        const owner = isOwner(ctx);
+        const premium = owner ? true : await isPremium(ctx.senderNumber);
 
-        if (!isCreator && !isPremium) {
-            return reply('❌ Ye command sirf *Premium* aur *Owner* ke liye hai.');
+        if (!owner && !premium) {
+            return requirePremium(ctx);
         }
 
+        const q = (ctx.q || '').trim();
         if (!q) {
-            return reply('❌ Channel post link do.\n\n*Example:* `.arcadd https://whatsapp.com/channel/xxxxx/123`');
+            return ctx.reply('❌ Channel post link do.\n\n*Example:* `.arcadd https://whatsapp.com/channel/xxxxx/123`');
         }
 
-        const link = q.trim().split(/\s+/)[0];
+        const link = q.split(/\s+/)[0];
 
         const match = link.match(/channel\/([A-Za-z0-9_-]+)\/(\d+)/);
         if (!match) {
-            return reply('❌ Invalid WhatsApp channel post link.');
+            return ctx.reply('❌ Invalid WhatsApp channel post link.');
         }
 
         const channelId = match[1];
@@ -217,7 +252,7 @@ cmd({
             }
         }
 
-        return reply(
+        return ctx.reply(
             `✅ *Reaction Complete!*\n\n` +
             `📊 Total: *${EMOJIS.length}*\n` +
             `✔️ Success: *${success}*\n` +
@@ -225,11 +260,14 @@ cmd({
         );
 
     } catch (e) {
-        console.error(e);
+        console.error('arcadd error:', e);
         return ctx.reply('❌ Error: ' + e.message);
     }
 });
 
+// ===========================================================
+// REFERRALSTATS — Owner panel
+// ===========================================================
 cmd({
     pattern: 'referralstats',
     alias: ['refstats', 'adminpanel'],
@@ -256,7 +294,7 @@ cmd({
             ].join('\n'));
         }
         const report = await getReferralOverview();
-        const liveNumbers = Array.isArray(ctx.activeConnectionNumbers) ? ctx.activeConnectionNumbers : [];
+        const liveNumbers = global.activeSockets ? Array.from(global.activeSockets.keys()) : [];
         const premiumRows = report.premiumReferrers.slice(0, 25)
             .map((item, index) => `${index + 1}. ${item.number} — ${item.count} referrals`);
         const liveRows = liveNumbers.slice(0, 40).map((number, index) => `${index + 1}. ${number}`);
@@ -274,7 +312,7 @@ cmd({
             premiumRows.length ? premiumRows.join('\n') : 'Abhi koi premium member nahi.',
             report.premiumCount > 25 ? `List mein top 25 dikhaye; ${report.premiumCount} premium accounts total hain.` : '',
             '',
-            `Detail: *${ctx.config.PREFIX}referralstats <phone>*`
+            `Detail: *${config.PREFIX}referralstats <phone>*`
         ].join('\n'));
     } catch (error) {
         console.error('referralstats failed:', error.message);
@@ -283,7 +321,7 @@ cmd({
 });
 
 // ===========================================================
-// 🆕 MASS VOTE — Sab connected accounts se poll pe vote
+// MASSVOTE — Sab connected accounts se vote (experimental)
 // ===========================================================
 cmd({
     pattern: 'massvote',
@@ -295,8 +333,9 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
+        // 🆕 FIX — owner bypass, premium check safe
         const owner = isOwner(ctx);
-        const premium = await isPremium(ctx.senderNumber);
+        const premium = owner ? true : await isPremium(ctx.senderNumber);
 
         if (!owner && !premium) {
             return requirePremium(ctx);
@@ -308,10 +347,10 @@ cmd({
 
         if (!link || !optionIndex || optionIndex < 1) {
             return ctx.reply(
-                `❌ Use: *${ctx.config.PREFIX}massvote <poll link> <option number>*\n\n` +
+                `❌ Use: *${config.PREFIX}massvote <poll link> <option number>*\n\n` +
                 `Example:\n` +
-                `*${ctx.config.PREFIX}massvote https://whatsapp.com/channel/xxx/123 1*\n` +
-                `*${ctx.config.PREFIX}massvote https://whatsapp.com/channel/xxx/123 2*`
+                `*${config.PREFIX}massvote https://whatsapp.com/channel/xxx/123 1*\n` +
+                `*${config.PREFIX}massvote https://whatsapp.com/channel/xxx/123 2*`
             );
         }
 
@@ -390,7 +429,7 @@ cmd({
 });
 
 // ===========================================================
-// addvotes — Deprecated (massvote use karo)
+// ADDVOTES — Deprecated
 // ===========================================================
 cmd({
     pattern: 'addvotes',

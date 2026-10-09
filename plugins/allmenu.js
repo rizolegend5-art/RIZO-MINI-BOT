@@ -7,6 +7,7 @@ cmd({
     alias: ["commandlist", "allmenu", "help"],
     desc: "Fetch and display all available bot commands",
     category: "system",
+    react: "📋",
     filename: __filename,
 }, async (conn, mek, m, { reply }) => {
     try {
@@ -24,18 +25,34 @@ cmd({
 
             totalCommands++;
             if (!grouped[cmd.category]) grouped[cmd.category] = [];
-            grouped[cmd.category].push({ pattern: cmd.pattern, aliases: cmd.alias || [] });
+            grouped[cmd.category].push(cmd.pattern);   // ✅ Sirf pattern
         }
 
+        // Category icons
+        const icons = {
+            admin: '⚙️', adult: '🔞', download: '📥', downloader: '📥',
+            fun: '🎮', general: '💠', group: '👥', islamic: '🕌',
+            main: '⚡', menu: '📋', owner: '👑', premium: '💎',
+            settings: '🔧', sticker: '🎨', system: '💻', tools: '🛠️',
+            music: '🎵', image: '🖼️', referrals: '🔗', misc: '📌'
+        };
+
+        // Category order (jo pehle dikhe)
+        const order = ['premium', 'owner', 'admin', 'group', 'download', 'downloader', 'music', 'islamic', 'fun', 'tools', 'image', 'sticker', 'settings', 'general', 'main', 'system', 'misc'];
+
         let menuText = "";
+        for (const cat of order) {
+            if (!grouped[cat]) continue;
+            const icon = icons[cat] || '📌';
+            menuText += `\n${icon} *${cat.toUpperCase()}*\n`;
+            menuText += grouped[cat].sort().map(p => `◦ ${config.PREFIX}${p}`).join("\n") + "\n";
+        }
+        // Baaki categories (order me nahi thi)
         for (const cat of Object.keys(grouped).sort()) {
-            grouped[cat].sort((a, b) => a.pattern.localeCompare(b.pattern));
-            menuText += `\n🧚‍♀️ *${cat.toUpperCase()}*\n`;
-            menuText += grouped[cat].map(item => {
-                const aliases = item.aliases.filter(a => a && a !== item.pattern).slice(0, 4);
-                const alternateNames = aliases.length ? `  _(${aliases.join(", ")})_` : "";
-                return `💫 ${config.PREFIX}${item.pattern}${alternateNames}`;
-            }).join("\n") + "\n";
+            if (order.includes(cat.toLowerCase())) continue;
+            const icon = icons[cat.toLowerCase()] || '📌';
+            menuText += `\n${icon} *${cat.toUpperCase()}*\n`;
+            menuText += grouped[cat].sort().map(p => `◦ ${config.PREFIX}${p}`).join("\n") + "\n";
         }
 
         const time = moment().tz("Asia/Karachi").format("HH:mm:ss");
@@ -52,11 +69,21 @@ cmd({
 ┃ ✦╰─────────────┈⊷
 ╰━━━━━━━━━━━━┈⊷
 💎 *PREMIUM — ${config.PREMIUM_REFERRALS} verified referrals*
-🔗 ${config.PREFIX}myref  ·  ${config.PREFIX}arcadd <post link> <emoji>
+🔗 ${config.PREFIX}myref  ·  ${config.PREFIX}arcadd
 ${menuText}
-`.trim();
+© ᴘᴏᴡᴇʀᴇᴅ ʙʏ RIZO-ᴍᴅ`.trim();
 
-        await conn.sendMessage(m.chat, { text: caption }, { quoted: m });
+        // ✅ Image ke saath bhejo
+        try {
+            await conn.sendMessage(m.chat, {
+                image: { url: config.IMAGE_PATH },
+                caption
+            }, { quoted: mek });
+        } catch (imgErr) {
+            console.error("Menu image failed:", imgErr.message);
+            // Image fail ho to text bhejo
+            await conn.sendMessage(m.chat, { text: caption }, { quoted: mek });
+        }
 
     } catch (err) {
         console.error("AllMenu Error:", err);
