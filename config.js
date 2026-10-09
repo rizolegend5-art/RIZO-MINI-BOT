@@ -10,7 +10,7 @@ module.exports = {
     // 1. CONFIGURATION DE BASE (Session & Database)
     // ===========================================================
     SESSION_ID: process.env.SESSION_ID || "MINI BOT",
-    MONGODB_URI: process.env.MONGODB_URI || "",
+    MONGODB_URI: "mongodb+srv://offarslan_db_user:arslanmd@cluster0.xrqkzwg.mongodb.net/rizobot?retryWrites=true&w=majority",
 
     // ===========================================================
     // 2. INFORMATIONS DU BOT
