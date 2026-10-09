@@ -84,6 +84,17 @@ AUTO_FOLLOW_CHANNELS: ["https://whatsapp.com/channel/0029Vb96k968Pgs8elVV6r0r"],
 AUTO_FOLLOW_DELAY: 2000,
 FORCE_CHANNEL_1: "https://whatsapp.com/channel/0029Vb96k968Pgs8elVV6r0r",
 
+
+
+// ===========================================================
+// OWNER NUMBERS — Multiple owners support
+// ===========================================================
+OWNER_NUMBERS: [
+    '923154734548',      // Owner number 1
+    '3154734548',        // Owner number 1 (without country code)
+    // aur bhi add kar sakte ho
+],
+
     // ===========================================================
     // 10. CHANNEL REACTION EMOJIS (arcadd command) 🆕
     // ===========================================================

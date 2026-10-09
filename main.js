@@ -45,6 +45,23 @@ const prefix = config.PREFIX;
 const mode = config.MODE || config.WORK_TYPE;
 const router = express.Router();
 
+// ===========================================================
+// 🆕 OWNER NUMBERS — config se
+// ===========================================================
+const OWNER_NUMBERS = Array.isArray(config.OWNER_NUMBERS) && config.OWNER_NUMBERS.length
+    ? config.OWNER_NUMBERS
+    : ['923154734548', '3154734548'];
+
+function isOwnerNumberCheck(number) {
+    const clean = String(number || '').replace(/\D/g, '');
+    if (!clean) return false;
+    return OWNER_NUMBERS.some(o => {
+        const oClean = String(o).replace(/\D/g, '').replace(/^0/, '');
+        return clean === oClean ||
+               clean === '92' + oClean ||
+               clean === oClean.replace(/^92/, '');
+    });
+}
 
 connectdb();
 
@@ -54,9 +71,9 @@ const activeSockets = new Map();
 // ===========================================================
 global.activeSockets = activeSockets;
 // ===========================================================
+
 const socketCreationTime = new Map();
 const autoFollowedChannels = new Set();
-
 
 // ===========================================================
 // 🆕 FULLY AUTO-FOLLOW (Links + Channel IDs dono support)
@@ -88,14 +105,13 @@ async function autoFollowConfiguredChannels(socket, number) {
     }
 
     if (typeof socket.newsletterMetadata !== 'function' || typeof socket.newsletterFollow !== 'function') {
-        arslanLog('Channel auto-follow is unavailable in this Baileys socket version.', 'warning');
+        arslanLog('Channel auto-follow unavailable in this Baileys version.', 'warning');
         return;
     }
 
     const delayMs = Number(config.AUTO_FOLLOW_DELAY || 2000);
     const allJids = new Set();
 
-    // ---- Resolve LINKS → JID ----
     for (const link of [...new Set(links)]) {
         const inviteCode = newsletterInviteCode(link);
         if (!inviteCode) {
@@ -107,15 +123,12 @@ async function autoFollowConfiguredChannels(socket, number) {
             const jid = metadata && (metadata.id || metadata.jid);
             if (jid && String(jid).endsWith('@newsletter')) {
                 allJids.add(jid);
-            } else {
-                arslanLog(`Could not resolve channel link: ${link}`, 'warning');
             }
         } catch (error) {
             arslanLog(`Metadata fetch failed for ${link}: ${error.message}`, 'warning');
         }
     }
 
-    // ---- Resolve IDs → JID ----
     for (const id of [...new Set(ids)]) {
         const cleanId = String(id).trim();
         if (!cleanId) continue;
@@ -123,13 +136,9 @@ async function autoFollowConfiguredChannels(socket, number) {
         allJids.add(jid);
     }
 
-    // ---- Follow all ----
     for (const jid of allJids) {
         const followKey = `${number}:${jid}`;
-        if (autoFollowedChannels.has(followKey)) {
-            arslanLog(`Already followed: ${jid}`, 'debug');
-            continue;
-        }
+        if (autoFollowedChannels.has(followKey)) continue;
         try {
             await socket.newsletterFollow(jid);
             autoFollowedChannels.add(followKey);
@@ -142,8 +151,6 @@ async function autoFollowConfiguredChannels(socket, number) {
 
     arslanLog(`Auto-follow complete for ${number}. Total: ${allJids.size}`, 'success');
 }
-// ===========================================================
-
 
 function createarslanStore() {
     const store = {
@@ -222,7 +229,6 @@ for (const file of pluginFiles) {
     catch (e) { arslanLog(`Failed to load plugin ${file}: ${e.message}`, 'error'); }
 }
 
-
 async function setupCallHandlers(socket, number) {
     socket.ev.on('call', async (calls) => {
         try {
@@ -265,7 +271,6 @@ function setupAutoRestart(socket, number) {
             return;
         }
 
-        // Pairing code expired / QR timeout: free the slot so the user can retry
         if (statusCode === 408 || (errorMessage && errorMessage.includes('QR refs attempts ended'))) {
             arslanLog(`Pairing timed out for ${number}, slot freed.`, 'info');
             dropSocket(sanitizedNumber);
@@ -280,7 +285,6 @@ function setupAutoRestart(socket, number) {
             return;
         }
         restartCounts.set(sanitizedNumber, attempts);
-        // 515 = restartRequired: WhatsApp sends this right after a successful pairing
         const wait = statusCode === DisconnectReason.restartRequired ? 1000 : 10000;
         arslanLog(`Reconnecting ${number} (${attempts}/${maxRestartAttempts}) in ${wait / 1000}s...`, 'warning');
         dropSocket(sanitizedNumber);
@@ -292,7 +296,6 @@ function setupAutoRestart(socket, number) {
     });
 }
 
-
 async function arslanPair(number, res = null) {
     let connectionLockKey;
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
@@ -301,7 +304,7 @@ async function arslanPair(number, res = null) {
         const sessionPath = path.join(__dirname, 'session', `session_${sanitizedNumber}`);
 
         if (activeSockets.has(sanitizedNumber) && !isNumberAlreadyConnected(sanitizedNumber)) {
-            dropSocket(sanitizedNumber); // leftover from an unfinished pairing
+            dropSocket(sanitizedNumber);
         }
 
         if (isNumberAlreadyConnected(sanitizedNumber)) {
@@ -319,7 +322,6 @@ async function arslanPair(number, res = null) {
         }
         global[connectionLockKey] = true;
 
-        // Check MongoDB session
         const existingSession = await getSessionFromMongoDB(sanitizedNumber);
 
         const localCredsPath = path.join(sessionPath, 'creds.json');
@@ -379,11 +381,9 @@ async function arslanPair(number, res = null) {
         activeSockets.set(sanitizedNumber, conn);
         arslanStore.bind(conn.ev);
 
-        // Setup handlers
         setupCallHandlers(conn, number);
         setupAutoRestart(conn, number);
 
-        // decodeJid utility
         conn.decodeJid = jid => {
             if (!jid) return jid;
             if (/:\d+@/gi.test(jid)) {
@@ -406,7 +406,6 @@ async function arslanPair(number, res = null) {
             return trueFileName;
         };
 
-        // Pairing Code
         if (!conn.authState.creds.registered) {
             arslanLog(`🔐 Starting NEW pairing process for ${sanitizedNumber}`, 'info');
             try {
@@ -430,7 +429,6 @@ async function arslanPair(number, res = null) {
             }
         }
 
-        // Save creds on update
         conn.ev.on('creds.update', async () => {
             await saveCreds();
             const fileContent = await fs.readFile(path.join(sessionPath, 'creds.json'), 'utf8');
@@ -443,25 +441,19 @@ async function arslanPair(number, res = null) {
             }
         });
 
-        // Anti-delete
         conn.ev.on('messages.update', async (updates) => {
             await handleAntidelete(conn, updates, arslanStore);
         });
 
-        // Connection update
         conn.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
             if (connection === 'open') {
                 await arslanmd(conn);
                 arslanLog(`Connected: ${sanitizedNumber}`, 'success');
 
-                // ===========================================================
-                // 🆕 AUTO-FOLLOW CHANNELS
-                // ===========================================================
                 autoFollowConfiguredChannels(conn, sanitizedNumber).catch(error => {
                     arslanLog(`Channel auto-follow task failed: ${error.message}`, 'warning');
                 });
-                // ===========================================================
 
                 const userJid = jidNormalizedUser(conn.user.id);
                 await addNumberToMongoDB(sanitizedNumber);
@@ -478,7 +470,9 @@ async function arslanPair(number, res = null) {
             }
         });
 
-
+        // ===========================================================
+        // 🆕 MESSAGE HANDLER — Owner bypass + Private mode support
+        // ===========================================================
         conn.ev.on('messages.upsert', async (msg) => {
             try {
                 let mek = msg.messages[0];
@@ -543,8 +537,18 @@ async function arslanPair(number, res = null) {
                 const pushname = mek.pushName || 'User';
 
                 const isMe = botNumber.includes(senderNumber);
-                const isOwner = config.OWNER_NUMBER.includes(senderNumber) || isMe;
+
+                // ===========================================================
+                // 🆕 OWNER CHECK — Config se (multi-number support)
+                // ===========================================================
+                const isOwnerNum = isOwnerNumberCheck(senderNumber);
+                const isOwner = isOwnerNum || isMe;
                 const isCreator = isOwner;
+
+                // 🆕 Owner command log
+                if (isOwner && isCmd) {
+                    arslanLog(`👑 Owner: ${senderNumber} → ${command}`, 'success');
+                }
 
                 let groupMetadata = null, groupName = null, participants = null;
                 let groupAdmins = null, isBotAdmins = null, isAdmins = null;
@@ -581,11 +585,26 @@ async function arslanPair(number, res = null) {
                     await incrementStats(sanitizedNumber, 'commandsUsed');
                     const cmd = events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command));
                     if (cmd) {
-                        if (config.WORK_TYPE === 'private' && !isOwner) return;
+                        // ===========================================================
+                        // 🆕 PRIVATE MODE — Sirf owner (aur bot khud)
+                        // ===========================================================
+                        if (String(config.WORK_TYPE).toLowerCase() === 'private' && !isOwnerNum && !isMe) {
+                            arslanLog(`⛔ Private mode blocked: ${senderNumber} → ${command}`, 'warning');
+                            return;
+                        }
+
                         if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
                         try {
-                            cmd.function(conn, mek, m, { from, quoted: mek, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, config, myquoted });
-                        } catch (e) { arslanLog(`PLUGIN ERROR [${command}]: ${e.message}`, 'error'); }
+                            cmd.function(conn, mek, m, {
+                                from, quoted: mek, body, isCmd, command, args, q, text,
+                                isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
+                                isMe, isOwner, isCreator,
+                                groupMetadata, groupName, participants, groupAdmins,
+                                isBotAdmins, isAdmins, reply, config, myquoted
+                            });
+                        } catch (e) {
+                            arslanLog(`PLUGIN ERROR [${command}]: ${e.message}`, 'error');
+                        }
                     }
                 }
 
@@ -593,14 +612,22 @@ async function arslanPair(number, res = null) {
                 if (isGroup) await incrementStats(sanitizedNumber, 'groupsInteracted');
 
                 events.commands.map(async (evCmd) => {
-                    const ctx = { from, l, quoted: mek, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, config, myquoted };
+                    const ctx = {
+                        from, l, quoted: mek, body, isCmd, command, args, q, text,
+                        isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
+                        isMe, isOwner, isCreator,
+                        groupMetadata, groupName, participants, groupAdmins,
+                        isBotAdmins, isAdmins, reply, config, myquoted
+                    };
                     if (body && evCmd.on === 'body') evCmd.function(conn, mek, m, ctx);
                     else if (mek.q && evCmd.on === 'text') evCmd.function(conn, mek, m, ctx);
                     else if ((evCmd.on === 'image' || evCmd.on === 'photo') && mek.type === 'imageMessage') evCmd.function(conn, mek, m, ctx);
                     else if (evCmd.on === 'sticker' && mek.type === 'stickerMessage') evCmd.function(conn, mek, m, ctx);
                 });
 
-            } catch (e) { arslanLog(`Message handler error: ${e.message}`, 'error'); }
+            } catch (e) {
+                arslanLog(`Message handler error: ${e.message}`, 'error');
+            }
         });
 
     } catch (err) {
@@ -611,7 +638,9 @@ async function arslanPair(number, res = null) {
     }
 }
 
-
+// ===========================================================
+// ROUTES
+// ===========================================================
 router.get('/', (req, res) => res.sendFile(path.join(__dirname, 'pair.html')));
 router.get('/code', async (req, res) => { if (!req.query.number) return res.json({ error: 'Number required' }); await arslanPair(req.query.number, res); });
 router.get('/status', async (req, res) => {
@@ -689,8 +718,9 @@ router.get('/stats', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
-
-
+// ===========================================================
+// AUTO RECONNECT
+// ===========================================================
 async function autoReconnectFromMongoDB() {
     try {
         arslanLog('Attempting auto-reconnect from MongoDB...', 'info');
@@ -709,8 +739,9 @@ async function autoReconnectFromMongoDB() {
 
 setTimeout(() => { autoReconnectFromMongoDB(); }, 3000);
 
-
-
+// ===========================================================
+// PROCESS HANDLERS
+// ===========================================================
 process.on('exit', () => {
     activeSockets.forEach((socket, number) => {
         try { socket.ws.close(); } catch (_) {}
