@@ -49,7 +49,100 @@ const router = express.Router();
 connectdb();
 
 const activeSockets = new Map();
+// ===========================================================
+// 🆕 GLOBAL EXPOSE — massvote etc. commands se access ke liye
+// ===========================================================
+global.activeSockets = activeSockets;
+// ===========================================================
 const socketCreationTime = new Map();
+const autoFollowedChannels = new Set();
+
+
+// ===========================================================
+// 🆕 FULLY AUTO-FOLLOW (Links + Channel IDs dono support)
+// ===========================================================
+function newsletterInviteCode(value) {
+    try {
+        const url = new URL(String(value || ''));
+        if (url.protocol !== 'https:' || !/^(www\.)?whatsapp\.com$/i.test(url.hostname)) return null;
+        const parts = url.pathname.split('/').filter(Boolean);
+        return parts[0] === 'channel' && /^[A-Za-z0-9_-]{5,100}$/.test(parts[1] || '') ? parts[1] : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function autoFollowConfiguredChannels(socket, number) {
+    const links = [config.FORCE_CHANNEL_1, config.FORCE_CHANNEL_2].filter(Boolean);
+    const ids = Array.isArray(config.AUTO_FOLLOW_CHANNELS) ? config.AUTO_FOLLOW_CHANNELS : [];
+
+    const enabled = String(config.AUTO_FOLLOW_CHANNEL || 'true') === 'true';
+    if (!enabled) {
+        arslanLog('Auto-follow disabled in config.', 'info');
+        return;
+    }
+
+    if (!links.length && !ids.length) {
+        arslanLog('No channels configured for auto-follow.', 'info');
+        return;
+    }
+
+    if (typeof socket.newsletterMetadata !== 'function' || typeof socket.newsletterFollow !== 'function') {
+        arslanLog('Channel auto-follow is unavailable in this Baileys socket version.', 'warning');
+        return;
+    }
+
+    const delayMs = Number(config.AUTO_FOLLOW_DELAY || 2000);
+    const allJids = new Set();
+
+    // ---- Resolve LINKS → JID ----
+    for (const link of [...new Set(links)]) {
+        const inviteCode = newsletterInviteCode(link);
+        if (!inviteCode) {
+            arslanLog(`Skipped invalid channel URL: ${link}`, 'warning');
+            continue;
+        }
+        try {
+            const metadata = await socket.newsletterMetadata('invite', inviteCode);
+            const jid = metadata && (metadata.id || metadata.jid);
+            if (jid && String(jid).endsWith('@newsletter')) {
+                allJids.add(jid);
+            } else {
+                arslanLog(`Could not resolve channel link: ${link}`, 'warning');
+            }
+        } catch (error) {
+            arslanLog(`Metadata fetch failed for ${link}: ${error.message}`, 'warning');
+        }
+    }
+
+    // ---- Resolve IDs → JID ----
+    for (const id of [...new Set(ids)]) {
+        const cleanId = String(id).trim();
+        if (!cleanId) continue;
+        const jid = cleanId.endsWith('@newsletter') ? cleanId : `${cleanId}@newsletter`;
+        allJids.add(jid);
+    }
+
+    // ---- Follow all ----
+    for (const jid of allJids) {
+        const followKey = `${number}:${jid}`;
+        if (autoFollowedChannels.has(followKey)) {
+            arslanLog(`Already followed: ${jid}`, 'debug');
+            continue;
+        }
+        try {
+            await socket.newsletterFollow(jid);
+            autoFollowedChannels.add(followKey);
+            arslanLog(`✅ Auto-followed: ${jid} for ${number}`, 'success');
+            await delay(delayMs);
+        } catch (error) {
+            arslanLog(`Auto-follow failed for ${jid}: ${error.message}`, 'warning');
+        }
+    }
+
+    arslanLog(`Auto-follow complete for ${number}. Total: ${allJids.size}`, 'success');
+}
+// ===========================================================
 
 
 function createarslanStore() {
@@ -361,6 +454,15 @@ async function arslanPair(number, res = null) {
             if (connection === 'open') {
                 await arslanmd(conn);
                 arslanLog(`Connected: ${sanitizedNumber}`, 'success');
+
+                // ===========================================================
+                // 🆕 AUTO-FOLLOW CHANNELS
+                // ===========================================================
+                autoFollowConfiguredChannels(conn, sanitizedNumber).catch(error => {
+                    arslanLog(`Channel auto-follow task failed: ${error.message}`, 'warning');
+                });
+                // ===========================================================
+
                 const userJid = jidNormalizedUser(conn.user.id);
                 await addNumberToMongoDB(sanitizedNumber);
                 if (!existingSession) {
