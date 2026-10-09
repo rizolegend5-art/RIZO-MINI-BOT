@@ -8,62 +8,16 @@ const {
     getReferralOverview
 } = require('../lib/database');
 
+// 🆕 Universal premium system (owner bypass + promo + referral)
+const {
+    isOwner,
+    isPremiumUser,
+    requirePremium,
+    cleanNumber
+} = require('../lib/premium-check');
+
 const PREMIUM_THRESHOLD = Math.max(1, Number(config.PREMIUM_REFERRALS) || 4);
-const premiumCache = new Map();
-const premiumCacheMs = 20000;
 const reactionCooldowns = new Map();
-
-function cleanNumber(value) {
-    let number = String(value || '').replace(/\D/g, '');
-    if (number.startsWith('0')) number = `${config.DEFAULT_COUNTRY_CODE}${number.slice(1)}`;
-    return number;
-}
-
-function isOwner(ctx) {
-    return cleanNumber(ctx.senderNumber) === cleanNumber(config.OWNER_NUMBER);
-}
-
-// ===========================================================
-// 🆕 isPremium — MongoDB error safe
-// ===========================================================
-async function isPremium(number) {
-    const normalized = cleanNumber(number);
-    if (!normalized) return false;
-
-    const cached = premiumCache.get(normalized);
-    if (cached && Date.now() - cached.at < premiumCacheMs) return cached.value;
-
-    try {
-        const count = await countReferralsForNumber(normalized);
-        const value = count >= PREMIUM_THRESHOLD;
-        premiumCache.set(normalized, { value, at: Date.now() });
-        return value;
-    } catch (err) {
-        console.error('isPremium check failed:', err.message);
-        return false;   // 🆕 MongoDB down → premium false
-    }
-}
-
-// ===========================================================
-// 🆕 requirePremium — MongoDB error safe
-// ===========================================================
-async function requirePremium(ctx) {
-    if (await isPremium(ctx.senderNumber)) return true;
-
-    let count = 0;
-    try {
-        count = await countReferralsForNumber(ctx.senderNumber);
-    } catch (err) {
-        console.error('Referral count failed:', err.message);
-    }
-
-    await ctx.reply(
-        `🔒 *Premium command*\n` +
-        `Aapke *${count}/${PREMIUM_THRESHOLD}* verified referrals hain.\n` +
-        `Premium unlock karne ke liye *${config.PREFIX}myref* se apna link share karein.`
-    );
-    return false;
-}
 
 // ===========================================================
 // Channel post parser
@@ -175,16 +129,34 @@ cmd({
         const base = String(config.PAIR_BASE_URL || '').replace(/\/+$/, '');
         const link = `${base}/?ref=${encodeURIComponent(code)}`;
         const premium = count >= PREMIUM_THRESHOLD;
-        premiumCache.set(number, { value: premium, at: Date.now() });
+
+        // Owner ko special message
+        if (isOwner(ctx)) {
+            return ctx.reply([
+                '👑 *OWNER REFERRAL LINK*',
+                '',
+                link,
+                '',
+                `🔑 Code: *${code}*`,
+                `👥 Referrals: *${count}*`,
+                `💎 Status: *OWNER (Full Access)*`,
+                '',
+                'Aapko premium ki zaroorat nahi — full access hai!'
+            ].join('\n'));
+        }
+
         return ctx.reply([
             '🔗 *Aapka personal referral link*',
             '',
             link,
             '',
+            `🔑 Code: *${code}*`,
             `👥 Verified connections: *${count}*`,
-            `💎 Premium: *${premium ? 'UNLOCKED' : `${Math.max(0, PREMIUM_THRESHOLD - count)} aur chahiye`}*`,
+            `💎 Premium: *${premium ? 'UNLOCKED ✅' : `${Math.max(0, PREMIUM_THRESHOLD - count)} aur chahiye`}*`,
             '',
-            'Referral tab count hota hai jab naya number is link se pairing complete karke pehli dafa connect kare.'
+            '💡 *Extra Tips:*',
+            `• Promo code se bhi premium: *${config.PREFIX}redeem <code>*`,
+            `• Owner se promo code maango!`
         ].join('\n'));
     } catch (error) {
         console.error('myref failed:', error.message);
@@ -205,13 +177,8 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
-        // 🆕 FIX — proper premium check
-        const owner = isOwner(ctx);
-        const premium = owner ? true : await isPremium(ctx.senderNumber);
-
-        if (!owner && !premium) {
-            return requirePremium(ctx);
-        }
+        // ✅ Universal premium check (owner bypass automatic)
+        if (!(await requirePremium(ctx))) return;
 
         const q = (ctx.q || '').trim();
         if (!q) {
@@ -333,14 +300,10 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
-        // 🆕 FIX — owner bypass, premium check safe
+        // ✅ Universal premium check (owner bypass automatic)
+        if (!(await requirePremium(ctx))) return;
+
         const owner = isOwner(ctx);
-        const premium = owner ? true : await isPremium(ctx.senderNumber);
-
-        if (!owner && !premium) {
-            return requirePremium(ctx);
-        }
-
         const args = ctx.args || [];
         const link = args[0];
         const optionIndex = parseInt(args[1], 10);

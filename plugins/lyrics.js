@@ -4,60 +4,66 @@ const config = require('../config');
 cmd({
     pattern: 'lyrics',
     alias: ['lyric', 'songlyrics', 'lirik'],
-    desc: 'Song ke lyrics, artist aur image',
-    category: 'download',
+    desc: 'Song ke lyrics',
+    category: 'music',
     react: '🎵',
     use: '.lyrics <song name>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     const songTitle = (ctx.q || '').trim();
+    if (!songTitle) return ctx.reply('🎵 Use: `.lyrics <song name>`');
 
-    if (!songTitle) {
-        return ctx.reply(
-            '🎵 *abey jana song ka name do abhi deta ho lyrics!*\n' +
-            `Usage: \`${config.PREFIX}lyrics <song name>\``
-        );
+    // 🚀 Try multiple APIs
+    const apis = [
+        // API 1 — lyrics.ovh (free, no key)
+        async () => {
+            const r = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent('')}/${encodeURIComponent(songTitle)}`);
+            const d = await r.json();
+            if (d?.lyrics) return { lyrics: d.lyrics, title: songTitle };
+            throw new Error('lyrics.ovh failed');
+        },
+
+        // API 2 — discardapi (tumhara original)
+        async () => {
+            const r = await fetch(`https://discardapi.dpdns.org/api/music/lyrics?apikey=qasim&song=${encodeURIComponent(songTitle)}`);
+            const d = await r.json();
+            const msg = d?.result?.message;
+            if (msg?.lyrics) return {
+                lyrics: msg.lyrics,
+                title: msg.title || songTitle,
+                artist: msg.artist,
+                image: msg.image
+            };
+            throw new Error('discard failed');
+        }
+    ];
+
+    for (const api of apis) {
+        try {
+            const data = await api();
+            const maxChars = 3800;
+            const lyrics = data.lyrics.length > maxChars
+                ? data.lyrics.slice(0, maxChars) + '...'
+                : data.lyrics;
+
+            const caption = [
+                `🎵 *${data.title}*`,
+                data.artist ? `👤 *Artist:* ${data.artist}` : '',
+                '',
+                '📝 *Lyrics:*',
+                lyrics
+            ].filter(Boolean).join('\n');
+
+            if (data.image) {
+                await conn.sendMessage(ctx.from, { image: { url: data.image }, caption }, { quoted: mek });
+            } else {
+                await ctx.reply(caption);
+            }
+            return;
+        } catch (e) {
+            console.error('API failed:', e.message);
+        }
     }
 
-    try {
-        const apiUrl = `https://okatsu-rolezapiiz.vercel.app/downloader/ytmp3?url=${encodeURIComponent(songTitle)}`;
-        const res = await fetch(apiUrl);
-        if (!res.ok) throw new Error(`API request fail rizo ko bataio kah error hain yar ${res.status}`);
-
-        const data = await res.json();
-        const messageData = data?.result?.message;
-
-        if (!messageData?.lyrics) {
-            return ctx.reply(`❌ abey, "${songTitle}" is name ka koi song nahi hain jana.`);
-        }
-
-        const { artist, lyrics, image, title, url } = messageData;
-
-        // WhatsApp caption limit 4096 — lyrics bade to cut karo
-        const maxChars = 3800;
-        const lyricsOutput = lyrics.length > maxChars
-            ? `${lyrics.slice(0, maxChars - 3)}...`
-            : lyrics;
-
-        const caption = [
-            `🎵 *${title || songTitle}*`,
-            `👤 *Artist:* ${artist || 'N/A'}`,
-            url ? `🔗 *URL:* ${url}` : '',
-            '',
-            '📝 *Lyrics:*',
-            lyricsOutput
-        ].filter(Boolean).join('\n');
-
-        if (image) {
-            await conn.sendMessage(ctx.from, {
-                image: { url: image },
-                caption
-            }, { quoted: mek });
-        } else {
-            await ctx.reply(caption);
-        }
-    } catch (error) {
-        console.error('Lyrics Command Error:', error);
-        return ctx.reply(`❌ "${songTitle}" ke lyrics fetch nahi ho sakin. Dobara try karo.`);
-    }
+    return ctx.reply(`❌ "${songTitle}" ke lyrics nahi mile. Spelling check karo.`);
 });

@@ -3,29 +3,11 @@ const config = require('../config');
 const fs = require('fs-extra');
 const path = require('path');
 
-function cleanNumber(value) {
-    let n = String(value || '').replace(/\D/g, '');
-    if (n.startsWith('0')) n = `${config.DEFAULT_COUNTRY_CODE}${n.slice(1)}`;
-    return n;
-}
-
-function isOwner(ctx) {
-    return cleanNumber(ctx.senderNumber) === cleanNumber(config.OWNER_NUMBER);
-}
-
-async function isPremiumOrOwner(ctx) {
-    if (isOwner(ctx)) return true;
-    try {
-        const { countReferralsForNumber } = require('../lib/database');
-        const count = await countReferralsForNumber(ctx.senderNumber);
-        return count >= Math.max(1, Number(config.PREMIUM_REFERRALS) || 4);
-    } catch {
-        return false;
-    }
-}
+// ✅ Sirf import — baaki sab premium-check.js me hai
+const { requirePremium, isOwner, isPremiumUser } = require('../lib/premium-check');
 
 // ===========================================================
-// 1. SETPP — Bot ki display pic change (Premium + Owner)
+// 1. SETPP — Bot ki display pic change
 // ===========================================================
 cmd({
     pattern: 'setpp',
@@ -36,9 +18,8 @@ cmd({
     use: '.setpp (image reply karke)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Ye command sirf *Premium* aur *Owner* ke liye hai.\nPremium unlock: *.myref*');
-    }
+    // ✅ Premium check (owner auto bypass)
+    if (!(await requirePremium(ctx))) return;
 
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const imgMsg = quoted?.imageMessage || mek.message?.imageMessage;
@@ -65,7 +46,7 @@ cmd({
 });
 
 // ===========================================================
-// 2. REMOVEPP — Bot ki pic hatao (Premium + Owner)
+// 2. REMOVEPP
 // ===========================================================
 cmd({
     pattern: 'removepp',
@@ -75,9 +56,8 @@ cmd({
     react: '🗑️',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Ye command sirf *Premium* aur *Owner* ke liye hai.');
-    }
+    if (!(await requirePremium(ctx))) return;
+
     try {
         await conn.removeProfilePicture(conn.user.id);
         return ctx.reply('✅ *Bot ki PP remove ho gayi.*');
@@ -87,7 +67,7 @@ cmd({
 });
 
 // ===========================================================
-// 3. SETBOTNAME — Bot ka WhatsApp naam change (Premium + Owner)
+// 3. SETBOTNAME
 // ===========================================================
 cmd({
     pattern: 'setbotname',
@@ -98,9 +78,7 @@ cmd({
     use: '.setbotname RIZO-MD V2',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Ye command sirf *Premium* aur *Owner* ke liye hai.');
-    }
+    if (!(await requirePremium(ctx))) return;
 
     const name = (ctx.q || '').trim();
     if (!name || name.length > 25) {
@@ -116,7 +94,7 @@ cmd({
 });
 
 // ===========================================================
-// 4. SETSTATUS — Bot ka About/Status change (Premium + Owner)
+// 4. SETSTATUS
 // ===========================================================
 cmd({
     pattern: 'setstatus',
@@ -127,9 +105,7 @@ cmd({
     use: '.setstatus Available 24/7',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Ye command sirf *Premium* aur *Owner* ke liye hai.');
-    }
+    if (!(await requirePremium(ctx))) return;
 
     const text = (ctx.q || '').trim();
     if (!text || text.length > 139) {
@@ -145,7 +121,7 @@ cmd({
 });
 
 // ===========================================================
-// 5. BOTINFO — Bot ki poori info (sab ke liye)
+// 5. BOTINFO
 // ===========================================================
 cmd({
     pattern: 'botinfo',
@@ -183,20 +159,18 @@ cmd({
 });
 
 // ===========================================================
-// 6. SETPPINFO — Ek saath DP + Name + Status change (Premium + Owner)
+// 6. SETALL — Ek saath sab
 // ===========================================================
 cmd({
     pattern: 'setall',
     alias: ['setbotall', 'botbrand'],
-    desc: 'Premium/Owner: Bot ki DP + Name + Status ek saath set karo',
+    desc: 'Premium/Owner: DP + Name + Status ek saath',
     category: 'premium',
     react: '⚡',
     use: '.setall Name | Status | (image reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Ye command sirf *Premium* aur *Owner* ke liye hai.');
-    }
+    if (!(await requirePremium(ctx))) return;
 
     const parts = (ctx.q || '').split('|').map(x => x.trim());
     const name = parts[0] || '';
@@ -208,8 +182,7 @@ cmd({
         return ctx.reply(
             '❌ Kuch bhi set karne ke liye do.\n\n' +
             '*Examples:*\n' +
-            '• `.setall RIZO-MD V2 | Online 24/7 |` (image reply karke)\n' +
-            '• `.setall NewName | New Status |`\n' +
+            '• `.setall RIZO-MD V2 | Online 24/7 |`\n' +
             '• `.setall | |` (sirf image reply ke saath)'
         );
     }
@@ -217,7 +190,6 @@ cmd({
     let results = [];
     await ctx.reply('⚡ Bot branding update kar raha hun…');
 
-    // Profile Pic
     if (imgMsg) {
         try {
             const filePath = await conn.downloadAndSaveMediaMessage(
@@ -227,29 +199,21 @@ cmd({
             await conn.updateProfilePicture(conn.user.id, { url: filePath });
             await fs.remove(filePath).catch(() => {});
             results.push('✅ DP updated');
-        } catch (e) {
-            results.push('❌ DP fail: ' + e.message);
-        }
+        } catch (e) { results.push('❌ DP fail: ' + e.message); }
     }
 
-    // Name
     if (name && name.length <= 25) {
         try {
             await conn.updateProfileName(name);
             results.push(`✅ Naam: ${name}`);
-        } catch (e) {
-            results.push('❌ Naam fail: ' + e.message);
-        }
+        } catch (e) { results.push('❌ Naam fail: ' + e.message); }
     }
 
-    // Status
     if (status && status.length <= 139) {
         try {
             await conn.updateProfileStatus(status);
             results.push(`✅ Status: ${status}`);
-        } catch (e) {
-            results.push('❌ Status fail: ' + e.message);
-        }
+        } catch (e) { results.push('❌ Status fail: ' + e.message); }
     }
 
     return ctx.reply(`⚡ *BRANDING UPDATE*\n\n${results.join('\n')}`);

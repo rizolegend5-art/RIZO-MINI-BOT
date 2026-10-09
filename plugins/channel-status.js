@@ -1,28 +1,16 @@
 const { cmd } = require('../arslan');
 const config = require('../config');
-const axios = require('axios');
 
-function cleanNumber(value) {
-    let n = String(value || '').replace(/\D/g, '');
-    if (n.startsWith('0')) n = `${config.DEFAULT_COUNTRY_CODE}${n.slice(1)}`;
-    return n;
-}
-
-function isOwner(ctx) {
-    return cleanNumber(ctx.senderNumber) === cleanNumber(config.OWNER_NUMBER);
-}
-
-async function isPremiumOrOwner(ctx) {
-    if (isOwner(ctx)) return true;
-    try {
-        const { countReferralsForNumber } = require('../lib/database');
-        const count = await countReferralsForNumber(ctx.senderNumber);
-        return count >= Math.max(1, Number(config.PREMIUM_REFERRALS) || 4);
-    } catch { return false; }
-}
+// 🆕 Universal premium system (owner bypass + promo + referral)
+const {
+    requirePremium,
+    isOwner,
+    isPremiumUser,
+    cleanNumber
+} = require('../lib/premium-check');
 
 // ===========================================================
-// 1. CHANNELSTATUS — Channel pe temporary status post karo
+// 1. CHANNELSTATUS — Channel pe text/image status
 // ===========================================================
 cmd({
     pattern: 'channelstatus',
@@ -30,12 +18,11 @@ cmd({
     desc: 'Premium/Owner: Channel pe 24hr temporary status post karo',
     category: 'premium',
     react: '📢',
-    use: '.channelstatus <channel_jid> <text> (ya image reply)',
+    use: '.channelstatus <channel_jid> <text>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Ye command sirf *Premium* aur *Owner* ke liye hai.');
-    }
+    // ✅ Universal premium check (owner bypass auto)
+    if (!(await requirePremium(ctx))) return;
 
     const parts = (ctx.q || '').split(' ');
     const channelJid = parts.shift();
@@ -52,11 +39,9 @@ cmd({
     }
 
     try {
-        // Channel JID format check
         const jid = channelJid.endsWith('@newsletter') ? channelJid : `${channelJid}@newsletter`;
-
-        // Image ya text status
         const imgMsg = mek.message?.imageMessage;
+
         if (imgMsg) {
             const filePath = await conn.downloadAndSaveMediaMessage(
                 { msg: imgMsg, mtype: 'imageMessage' },
@@ -77,7 +62,7 @@ cmd({
 });
 
 // ===========================================================
-// 2. CHANNELSTATUSIMG — Image channel status
+// 2. CHSTATIMG — Image status
 // ===========================================================
 cmd({
     pattern: 'chstatimg',
@@ -88,9 +73,7 @@ cmd({
     use: '.chstatimg <channel_jid> (image reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Premium/Owner only.');
-    }
+    if (!(await requirePremium(ctx))) return;
 
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const imgMsg = quoted?.imageMessage || mek.message?.imageMessage;
@@ -115,7 +98,7 @@ cmd({
 });
 
 // ===========================================================
-// 3. CHANNELSTATUSVID — Video channel status
+// 3. CHSTATVID — Video status
 // ===========================================================
 cmd({
     pattern: 'chstatvid',
@@ -126,9 +109,7 @@ cmd({
     use: '.chstatvid <channel_jid> (video reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Premium/Owner only.');
-    }
+    if (!(await requirePremium(ctx))) return;
 
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const vidMsg = quoted?.videoMessage || mek.message?.videoMessage;
@@ -153,47 +134,184 @@ cmd({
 });
 
 // ===========================================================
-// 4. CHANNELSTATUSAUTO — Random Islamic/Motivational status
+// 4. CHSTATSTICKER — Sticker post
 // ===========================================================
 cmd({
-    pattern: 'chstatauto',
-    alias: ['autostatus', 'randomstatus'],
-    desc: 'Premium/Owner: Random status channel pe post karo',
+    pattern: 'chstatsticker',
+    alias: ['stickerstatus', 'chstatstk'],
+    desc: 'Premium/Owner: Sticker channel pe post karo',
     category: 'premium',
-    react: '🎲',
-    use: '.chstatauto <channel_jid>',
+    react: '🎨',
+    use: '.chstatsticker <channel_jid> (image reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await isPremiumOrOwner(ctx))) {
-        return ctx.reply('🔒 Premium/Owner only.');
-    }
+    if (!(await requirePremium(ctx))) return;
+
+    const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    const imgMsg = quoted?.imageMessage || mek.message?.imageMessage;
+    if (!imgMsg) return ctx.reply('❌ Image pe reply karo.');
 
     const channelJid = (ctx.args[0] || '').trim();
     if (!channelJid) return ctx.reply('❌ Channel JID do.');
 
-    const statuses = [
-        '🤲 Ya Allah, make this day better than yesterday.',
-        '🌙 "Verily, with hardship comes ease." — Quran 94:6',
-        '📿 SubhanAllahi wa bihamdihi, SubhanAllahil Azeem.',
-        '💫 The best among you are those who learn Quran and teach it.',
-        '✨ Whoever fears Allah — He will make a way out for him.',
-        '🌟 Jumma Mubarak! May Allah bless you with peace.',
-        '🕌 Don\'t forget to read Surah Al-Kahf today.',
-        '🕋 Indeed, prayer prohibits immorality and wrongdoing.'
-    ];
-    const pick = statuses[Math.floor(Math.random() * statuses.length)];
-
     try {
         const jid = channelJid.endsWith('@newsletter') ? channelJid : `${channelJid}@newsletter`;
-        await conn.sendMessage(jid, { text: pick });
-        return ctx.reply(`✅ Random status post ho gaya!\n📌 ${jid}\n💬 ${pick}`);
+        const filePath = await conn.downloadAndSaveMediaMessage(
+            { msg: imgMsg, mtype: 'imageMessage' },
+            `./tmp/stk_${Date.now()}`
+        );
+        const { Sticker, StickerTypes } = require('wa-sticker-formatter');
+        const sticker = new Sticker(filePath, {
+            pack: config.BOT_NAME,
+            author: 'RIZO-MD',
+            type: StickerTypes.FULL,
+            quality: 80
+        });
+        const buffer = await sticker.toBuffer();
+        await conn.sendMessage(jid, { sticker: buffer });
+        return ctx.reply(`✅ Sticker post!\n📌 ${jid}`);
     } catch (e) {
         return ctx.reply('❌ ' + e.message);
     }
 });
 
 // ===========================================================
-// 5. CHANNELINFO — Channel ki info aur status support check
+// 5. CHSTATREMIND — Expiry reminder
+// ===========================================================
+cmd({
+    pattern: 'chstatremind',
+    alias: ['statusremind'],
+    desc: 'Premium/Owner: Status expiry reminder set karo',
+    category: 'premium',
+    react: '⏰',
+    use: '.chstatremind <channel_jid> <hours>',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    if (!(await requirePremium(ctx))) return;
+
+    const args = ctx.args || [];
+    const channelJid = args[0];
+    const hours = parseFloat(args[1]) || 24;
+
+    if (!channelJid) return ctx.reply('Use: `.chstatremind <channel_jid> <hours>`');
+    if (hours > 48) return ctx.reply('❌ Max 48 hours.');
+
+    const ms = hours * 3600 * 1000;
+    const sender = cleanNumber(ctx.senderNumber);
+
+    await ctx.reply(`⏰ Reminder set!\n📌 ${channelJid}\n⏱️ ${hours} hours baad yaad dilaunga.`);
+
+    setTimeout(async () => {
+        try {
+            await conn.sendMessage(sender + '@s.whatsapp.net', {
+                text: `⏰ *Status Expiry Reminder*\n\n📌 ${channelJid}\nStatus ${hours}hr me expire ho gaya hai.\nNaya status post karo!`
+            });
+        } catch (e) {
+            console.error('remind failed:', e.message);
+        }
+    }, ms);
+});
+
+// ===========================================================
+// 6. CHSTATFORWARD — Post ko group me forward
+// ===========================================================
+cmd({
+    pattern: 'chstatforward',
+    alias: ['chforward'],
+    desc: 'Premium/Owner: Channel post ko group me forward',
+    category: 'premium',
+    react: '↗️',
+    use: '.chstatforward <group_jid> (channel post pe reply)',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    if (!(await requirePremium(ctx))) return;
+
+    const groupJid = (ctx.args[0] || '').trim();
+    if (!groupJid) return ctx.reply('Use: `.chstatforward <group_jid>`');
+
+    const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!quoted) return ctx.reply('❌ Channel post pe reply karo.');
+
+    try {
+        await conn.sendMessage(groupJid, {
+            forward: {
+                key: mek.message.extendedTextMessage.contextInfo.stanzaId,
+                message: quoted
+            }
+        });
+        return ctx.reply(`✅ Post forward ho gaya!\n📌 → ${groupJid}`);
+    } catch (e) {
+        return ctx.reply('❌ ' + e.message);
+    }
+});
+
+// ===========================================================
+// 7. CHSTATREACT — Custom emoji reaction
+// ===========================================================
+cmd({
+    pattern: 'chstatreact',
+    alias: ['chreactstatus'],
+    desc: 'Premium/Owner: Channel status pe custom reaction',
+    category: 'premium',
+    react: '💫',
+    use: '.chstatreact <channel_jid> <serverId> <emoji>',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    if (!(await requirePremium(ctx))) return;
+
+    const args = ctx.args || [];
+    const channelJid = args[0];
+    const serverId = args[1];
+    const emoji = args[2] || '🔥';
+
+    if (!channelJid || !serverId) {
+        return ctx.reply('Use: `.chstatreact <channel_jid> <serverId> <emoji>`');
+    }
+
+    try {
+        const jid = channelJid.endsWith('@newsletter') ? channelJid : `${channelJid}@newsletter`;
+        await conn.newsletterReactMessage(jid, serverId, emoji);
+        return ctx.reply(`✅ Reaction *${emoji}* bheji gayi!\n📌 ${jid}/${serverId}`);
+    } catch (e) {
+        return ctx.reply('❌ ' + e.message);
+    }
+});
+
+// ===========================================================
+// 8. CHSTATBULK — Bulk status post multiple channels
+// ===========================================================
+cmd({
+    pattern: 'chstatbulk',
+    alias: ['bulkstatus'],
+    desc: 'Premium/Owner: Ek hi text multiple channels pe',
+    category: 'premium',
+    react: '📣',
+    use: '.chstatbulk <jid1,jid2,jid3> <text>',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    if (!(await requirePremium(ctx))) return;
+
+    const parts = (ctx.q || '').split(' ');
+    const jids = (parts.shift() || '').split(',').map(j => j.trim()).filter(Boolean);
+    const text = parts.join(' ');
+
+    if (!jids.length || !text) return ctx.reply('Use: `.chstatbulk <jid1,jid2> <text>`');
+
+    let success = 0, failed = 0;
+    for (const cj of jids) {
+        try {
+            const jid = cj.endsWith('@newsletter') ? cj : `${cj}@newsletter`;
+            await conn.sendMessage(jid, { text });
+            success++;
+            await new Promise(r => setTimeout(r, 1000));
+        } catch { failed++; }
+    }
+
+    return ctx.reply(`✅ *Bulk Status*\n\n📤 Success: *${success}*\n❌ Failed: *${failed}*`);
+});
+
+// ===========================================================
+// 9. CHANNELINFO — Channel info (free — sab users)
 // ===========================================================
 cmd({
     pattern: 'channelinfo',
@@ -224,7 +342,7 @@ cmd({
             `📝 Desc: *${(metadata?.description || 'N/A').slice(0, 100)}*`,
             '',
             '💡 *Channel Status* WhatsApp feature hai jo 24hr temporary updates allow karta hai.',
-            '✅ Ye bot usse use karta hai `.channelstatus` command se.'
+            `✅ Ye bot usse use karta hai \`${config.PREFIX}channelstatus\` command se.`
         ].join('\n'));
     } catch (e) {
         return ctx.reply('❌ Channel info fail: ' + e.message);
