@@ -1,6 +1,6 @@
 const { cmd, commands } = require("../arslan");
 const moment = require("moment-timezone");
-const { fakevCard } = require('../lib/fakevCard');
+const config = require("../config");
 
 cmd({
     pattern: "menu",
@@ -24,18 +24,23 @@ cmd({
 
             totalCommands++;
             if (!grouped[cmd.category]) grouped[cmd.category] = [];
-            grouped[cmd.category].push(cmd.pattern);
+            grouped[cmd.category].push({ pattern: cmd.pattern, aliases: cmd.alias || [] });
         }
 
         let menuText = "";
         for (const cat of Object.keys(grouped).sort()) {
-            grouped[cat].sort((a, b) => a.localeCompare(b));
+            grouped[cat].sort((a, b) => a.pattern.localeCompare(b.pattern));
             menuText += `\n🧚‍♀️ *${cat.toUpperCase()}*\n`;
-            menuText += grouped[cat].map(c => `💫 ${c}`).join("\n") + "\n";
+            menuText += grouped[cat].map(item => {
+                const aliases = item.aliases.filter(a => a && a !== item.pattern).slice(0, 4);
+                const alternateNames = aliases.length ? `  _(${aliases.join(", ")})_` : "";
+                return `💫 ${config.PREFIX}${item.pattern}${alternateNames}`;
+            }).join("\n") + "\n";
         }
 
-        const time = moment().tz("Africa/Kampala").format("HH:mm:ss");
-        const date = moment().tz("Africa/Kampala").format("dddd, MMMM Do YYYY");
+        const time = moment().tz("Asia/Karachi").format("HH:mm:ss");
+        const date = moment().tz("Asia/Karachi").format("dddd, MMMM Do YYYY");
+        const ownerDisplay = config.OWNER_DISPLAY_NUMBER || config.OWNER_NUMBER;
 
         const caption = `
 ╭━━━《 *RIZO-ᴍᴅ* 》━━━┈⊷
@@ -43,26 +48,15 @@ cmd({
 ┃ ✦│▸ Total Commands : *${totalCommands}*
 ┃ ✦│▸ Time           : ${time}
 ┃ ✦│▸ Date           : ${date}
-┃ ✦│▸ Platform       : rizoxmd.vercal.com
+┃ ✦│▸ Owner          : ${ownerDisplay}
 ┃ ✦╰─────────────┈⊷
 ╰━━━━━━━━━━━━┈⊷
+💎 *PREMIUM — ${config.PREMIUM_REFERRALS} verified referrals*
+🔗 ${config.PREFIX}myref  ·  ${config.PREFIX}arcadd <post link> <emoji>
 ${menuText}
 `.trim();
 
-        await conn.sendMessage(m.chat, {
-            image: { url: "https://files.catbox.moe/a622og.jpg" },
-            caption,
-            contextInfo: {
-                forwardingScore: 999,
-                isForwarded: true,
-                mentionedJid: [m.sender],
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: "120363430657109662@newsletter",
-                    newsletterName: "RIZO-𝙈𝘿 𝙈𝙞𝙣𝙞 𝙑²",
-                    serverMessageId: 2,
-                },
-            },
-        }, { quoted: fakevCard });
+        await conn.sendMessage(m.chat, { text: caption }, { quoted: m });
 
     } catch (err) {
         console.error("AllMenu Error:", err);

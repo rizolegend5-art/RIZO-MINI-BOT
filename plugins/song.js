@@ -33,13 +33,39 @@ function firstYouTubeUrl(value = "") {
   return match ? match[0] : null;
 }
 
+function withTimeout(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+      if (timer.unref) timer.unref();
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
 async function resolveVideo(query) {
   const direct = firstYouTubeUrl(query);
   if (direct) return { url: direct, info: null };
 
-  const search = await yts(query);
+  const search = await withTimeout(yts(query), 15000, "YOUTUBE_SEARCH_TIMEOUT");
   if (!search?.videos?.length) return null;
   return { url: search.videos[0].url, info: search.videos[0] };
+}
+
+function detectAudioMime(buffer, remoteUrl) {
+  const url = String(remoteUrl || '').toLowerCase();
+  if (url.includes('.mp3')) return { mime: 'audio/mpeg', ext: 'mp3' };
+  if (url.includes('.m4a') || url.includes('.mp4')) return { mime: 'audio/mp4', ext: 'm4a' };
+  if (url.includes('.ogg') || url.includes('.opus')) return { mime: 'audio/ogg; codecs=opus', ext: 'ogg' };
+  if (buffer && buffer.length >= 4) {
+    if (buffer.subarray(0, 3).toString() === 'ID3' || (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0)) {
+      return { mime: 'audio/mpeg', ext: 'mp3' };
+    }
+    if (buffer.subarray(4, 8).toString() === 'ftyp') return { mime: 'audio/mp4', ext: 'm4a' };
+    if (buffer.subarray(0, 4).toString('hex') === '1a45dfa3') return { mime: 'audio/webm; codecs=opus', ext: 'webm' };
+  }
+  return { mime: 'audio/mpeg', ext: 'mp3' };
 }
 
 async function discardAudio(videoUrl) {
@@ -47,7 +73,7 @@ async function discardAudio(videoUrl) {
     "https://discardapi.dpdns.org/api/music/lyrics",
     {
       params: { apikey: DISCARD_API_KEY, song: videoUrl },
-      timeout: 25000,
+      timeout: 18000,
       validateStatus: () => true,
       headers: { Accept: "application/json", "User-Agent": "RIZO-MD/1.0" }
     }
@@ -110,11 +136,41 @@ function runYtDlp(url, mode) {
     const child = spawn(YTDLP_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
     const chunks = [];
     const errors = [];
+    let bytes = 0;
+    let settled = false;
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      if (!settled) {
+        settled = true;
+        reject(new Error('YTDLP_TIMEOUT'));
+      }
+    }, 60000);
 
-    child.stdout.on("data", chunk => chunks.push(chunk));
+    child.stdout.on("data", chunk => {
+      bytes += chunk.length;
+      if (bytes > 30 * 1024 * 1024) {
+        child.kill('SIGKILL');
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          reject(new Error('MEDIA_TOO_LARGE'));
+        }
+        return;
+      }
+      chunks.push(chunk);
+    });
     child.stderr.on("data", chunk => errors.push(chunk));
-    child.on("error", err => reject(new Error(`YTDLP_UNAVAILABLE: ${err.message}`)));
+    child.on("error", err => {
+      clearTimeout(timeout);
+      if (!settled) {
+        settled = true;
+        reject(new Error(`YTDLP_UNAVAILABLE: ${err.message}`));
+      }
+    });
     child.on("close", code => {
+      clearTimeout(timeout);
+      if (settled) return;
+      settled = true;
       if (code !== 0 || !chunks.length) {
         reject(new Error(`YTDLP_FAILED_${code}: ${Buffer.concat(errors).toString().slice(-500)}`));
         return;
@@ -157,11 +213,12 @@ cmd({
     }
 
     const title = audio.title || resolved.info?.title || "YouTube Song";
+    const audioType = detectAudioMime(audio.buffer, audio.url);
     const message = {
       audio: audio.buffer ? audio.buffer : { url: audio.url },
-      mimetype: "audio/mpeg",
+      mimetype: audioType.mime,
       ptt: false,
-      fileName: `${title.replace(/[\\/:*?"<>|]/g, "_")}.mp3`,
+      fileName: `${title.replace(/[\\/:*?"<>|]/g, "_")}.${audioType.ext}`,
       caption: `🎵 *${title}*\n🎚️ Quality: ${audio.quality}\n\n> © RIZO-MD`,
       contextInfo: {
         externalAdReply: {
@@ -182,6 +239,9 @@ cmd({
     await conn.sendMessage(from, { react: { text: "❌", key: m.key } });
 
     if (err.message === "NO_RESULT") return reply("❌ No YouTube result found.");
+    if (err.message === "YOUTUBE_SEARCH_TIMEOUT") return reply("⌛ YouTube search took too long. Try a direct YouTube link or retry.");
+    if (err.message === "MEDIA_TOO_LARGE") return reply("❌ Audio file is over the 30 MB limit. Try a shorter track.");
+    if (err.message === "YTDLP_TIMEOUT") return reply("⌛ Song download timed out. Try a direct YouTube link or retry.");
     if (err.message === "YTDLP_UNAVAILABLE") {
       return reply("❌ Song service is unavailable. The remote API also failed, and yt-dlp is not installed on the server.");
     }
