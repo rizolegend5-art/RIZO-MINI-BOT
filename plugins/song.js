@@ -12,6 +12,9 @@ const AXIOS_DEFAULTS = {
     maxRedirects: 10
 };
 
+// ===========================================================
+// 🎯 Multi-API race for audio URL
+// ===========================================================
 async function getAudioUrl(youtubeUrl) {
     const apiCalls = [
         (async () => {
@@ -40,23 +43,47 @@ async function getAudioUrl(youtubeUrl) {
             throw new Error('Vreden failed');
         })()
     ];
+
     return await Promise.any(apiCalls);
 }
 
-async function downloadBuffer(url) {
-    const res = await axios.get(url, {
-        responseType: 'arraybuffer',
-        timeout: 120000,
-        maxRedirects: 10,
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.youtube.com/' }
-    });
-    return Buffer.from(res.data);
+// ===========================================================
+// 🎯 Buffer download with retry + redirect follow
+// ===========================================================
+async function downloadAudioBuffer(audioUrl, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await axios.get(audioUrl, {
+                responseType: 'arraybuffer',
+                timeout: 180000,
+                maxRedirects: 20,
+                maxContentLength: 100 * 1024 * 1024,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'audio/mpeg, audio/*, */*',
+                    'Accept-Encoding': 'identity',
+                    'Referer': 'https://www.youtube.com/'
+                }
+            });
+            const buf = Buffer.from(res.data);
+            if (buf.length < 5000) throw new Error('Buffer too small');
+            return buf;
+        } catch (err) {
+            console.error(`Download attempt ${i + 1} failed:`, err.message);
+            if (i === retries - 1) throw err;
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+    throw new Error('All download attempts failed');
 }
 
+// ===========================================================
+// SONG COMMAND
+// ===========================================================
 cmd({
     pattern: 'song',
     alias: ['ytmp3', 'play', 'mp3', 'gana', 'music', 'audio'],
-    desc: 'YouTube MP3',
+    desc: 'YouTube MP3 download',
     category: 'download',
     react: '🎵',
     use: '.song <name>',
@@ -70,7 +97,7 @@ cmd({
     try {
         let video;
         if (query.includes('youtube.com') || query.includes('youtu.be')) {
-            video = { url: query, title: 'YouTube', thumbnail: '' };
+            video = { url: query, title: 'YouTube Audio', thumbnail: '' };
         } else {
             const search = await yts(query);
             if (!search?.videos?.length) throw new Error('NO_RESULT');
@@ -85,8 +112,8 @@ cmd({
         }
 
         const audioData = await getAudioUrl(video.url);
-        const buffer = await downloadBuffer(audioData.download);
-        const finalTitle = audioData.title || video.title || 'Audio';
+        const buffer = await downloadAudioBuffer(audioData.download);
+        const finalTitle = audioData.title || video.title || 'YouTube Audio';
 
         await conn.sendMessage(ctx.from, {
             audio: buffer,
@@ -96,10 +123,13 @@ cmd({
         }, { quoted: mek });
 
         await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
+
     } catch (err) {
         console.error('SONG ERROR:', err.message);
         await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
+
         if (err.message === 'NO_RESULT') return ctx.reply('❌ Koi song nahi mila.');
-        return ctx.reply(`❌ Song fail. Dobara try karo.`);
+        if (err.name === 'AggregateError') return ctx.reply('❌ Sab API fail. 1 minute baad try karo.');
+        return ctx.reply(`❌ Song fail: ${err.message}`);
     }
 });

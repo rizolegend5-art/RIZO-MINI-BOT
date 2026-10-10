@@ -2,39 +2,54 @@ const { cmd } = require('../arslan');
 const config = require('../config');
 const fs = require('fs-extra');
 const path = require('path');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 // ===========================================================
-// 🎙️ JARVIS / ARIF VOICE — Free Edge-TTS
+// 🎙️ Edge-TTS setup
 // ===========================================================
 let EdgeTTS = null;
-
 try {
     const edgeTts = require('edge-tts-universal');
     EdgeTTS = edgeTts.UniversalEdgeTTS || edgeTts.EdgeTTS;
     console.log('✅ Edge-TTS loaded');
 } catch (e) {
-    console.log('⚠️ edge-tts-universal not installed');
+    console.log('⚠️ edge-tts-universal not installed. Run: npm install edge-tts-universal');
 }
 
 // ===========================================================
 // 🎤 VOICES
 // ===========================================================
 const VOICES = {
-    // Urdu voices
-    'jarvis': 'ur-PK-AsadNeural',       // Male Urdu (Jarvis style)
-    'raju': 'ur-PK-AsadNeural',         // Male Urdu
-    'asad': 'ur-PK-AsadNeural',         // Male Urdu
-    'uzma': 'ur-PK-UzmaNeural',         // Female Urdu
-    'female': 'ur-PK-UzmaNeural',
-    'male': 'ur-PK-AsadNeural',
-    // English voices
+    jarvis: 'ur-PK-AsadNeural',
+    raju: 'ur-PK-AsadNeural',
+    asad: 'ur-PK-AsadNeural',
+    uzma: 'ur-PK-UzmaNeural',
+    female: 'ur-PK-UzmaNeural',
+    male: 'ur-PK-AsadNeural',
     'english-m': 'en-US-GuyNeural',
     'english-f': 'en-US-AriaNeural',
-    'jarvis-en': 'en-US-GuyNeural'
+    'jarvis-en': 'en-US-GuyNeural',
+    hindi: 'hi-IN-MadhurNeural',
+    'hindi-f': 'hi-IN-SwaraNeural'
 };
 
 // ===========================================================
-// 1. TTS — Text to voice
+// 🎯 Convert MP3 to OGG (WhatsApp voice compatible)
+// ===========================================================
+async function mp3ToOgg(mp3Path, oggPath) {
+    try {
+        await execAsync(`ffmpeg -i "${mp3Path}" -c:a libopus -b:a 64k -ac 1 -ar 48000 -avoid_negative_ts make_zero "${oggPath}" -y`);
+        return true;
+    } catch (e) {
+        console.error('ffmpeg error:', e.message);
+        return false;
+    }
+}
+
+// ===========================================================
+// 1. TTS — Text to voice (Jarvis/Raju style)
 // ===========================================================
 cmd({
     pattern: 'tts',
@@ -42,7 +57,7 @@ cmd({
     desc: 'Text ko voice me convert karo (Jarvis/Raju style)',
     category: 'tools',
     react: '🎙️',
-    use: '.tts <text>  |  .tts jarvis <text>  |  .tts raju <text>',
+    use: '.tts <text>  |  .tts jarvis <text>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!EdgeTTS) {
@@ -60,11 +75,12 @@ cmd({
             '*Use:* `.tts <text>`',
             '',
             '*Voices:*',
-            '• `.tts jarvis <text>` — Male Urdu (Jarvis)',
-            '• `.tts raju <text>` — Male Urdu (Raju)',
-            '• `.tts uzma <text>` — Female Urdu',
-            '• `.tts english-m <text>` — English male',
-            '• `.tts english-f <text>` — English female',
+            '• `jarvis` — Male Urdu 🎙️',
+            '• `raju` — Male Urdu 🎙️',
+            '• `uzma` — Female Urdu 🎙️',
+            '• `hindi` — Hindi Male',
+            '• `english-m` — English Male',
+            '• `english-f` — English Female',
             '',
             '*Example:*',
             '`.tts jarvis salam bhai kaise ho`'
@@ -82,28 +98,48 @@ cmd({
         text = parts.slice(1).join(' ');
     }
 
-    if (!text) return ctx.reply('❌ Text do voice ke liye.');
+    if (!text || text.length < 2) return ctx.reply('❌ Text do voice ke liye.');
+    if (text.length > 500) return ctx.reply('❌ Max 500 characters.');
 
     await conn.sendMessage(ctx.from, { react: { text: '⏳', key: mek.key } });
 
     try {
         const tts = new EdgeTTS(text, voice);
         const result = await tts.synthesize();
-
         const audioBuffer = Buffer.from(await result.audio.arrayBuffer());
 
-        const tempFile = path.join(__dirname, '..', 'tmp', `tts_${Date.now()}.mp3`);
-        fs.ensureDirSync(path.dirname(tempFile));
-        await fs.writeFile(tempFile, audioBuffer);
+        const tmpDir = path.join(__dirname, '..', 'tmp');
+        fs.ensureDirSync(tmpDir);
 
-        await conn.sendMessage(ctx.from, {
-            audio: { url: tempFile },
-            mimetype: 'audio/mpeg',
-            ptt: true,
-            fileName: `voice_${Date.now()}.mp3`
-        }, { quoted: mek });
+        const mp3File = path.join(tmpDir, `tts_${Date.now()}.mp3`);
+        const oggFile = path.join(tmpDir, `tts_${Date.now()}.ogg`);
 
-        fs.remove(tempFile).catch(() => {});
+        await fs.writeFile(mp3File, audioBuffer);
+
+        // Convert to OGG for WhatsApp
+        const converted = await mp3ToOgg(mp3File, oggFile);
+
+        if (!converted) {
+            // Fallback: MP3 bhejo (kabhi kabhi chalta hai)
+            await conn.sendMessage(ctx.from, {
+                audio: { url: mp3File },
+                mimetype: 'audio/mpeg',
+                ptt: true,
+                fileName: `voice_${Date.now()}.mp3`
+            }, { quoted: mek });
+        } else {
+            await conn.sendMessage(ctx.from, {
+                audio: { url: oggFile },
+                mimetype: 'audio/ogg; codecs=opus',
+                ptt: true,
+                fileName: `voice_${Date.now()}.ogg`
+            }, { quoted: mek });
+        }
+
+        // Cleanup
+        fs.remove(mp3File).catch(() => {});
+        fs.remove(oggFile).catch(() => {});
+
         await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
 
     } catch (e) {
@@ -114,7 +150,7 @@ cmd({
 });
 
 // ===========================================================
-// 2. VOICELIST — Sab voices dikhao
+// 2. VOICES — Available voices
 // ===========================================================
 cmd({
     pattern: 'voices',
@@ -128,18 +164,19 @@ cmd({
         '🎤 *AVAILABLE VOICES*',
         '',
         '*Urdu:*',
-        '• `jarvis` — Male Urdu (Asad) 🎙️',
-        '• `raju` — Male Urdu (Asad) 🎙️',
-        '• `uzma` — Female Urdu 🎙️',
+        '• `jarvis` — Male (Asad) 🎙️',
+        '• `raju` — Male (Asad) 🎙️',
+        '• `uzma` — Female 🎙️',
+        '',
+        '*Hindi:*',
+        '• `hindi` — Male (Madhur)',
+        '• `hindi-f` — Female (Swara)',
         '',
         '*English:*',
-        '• `english-m` — English Male 🎙️',
-        '• `english-f` — English Female 🎙️',
-        '• `jarvis-en` — English Male 🎙️',
+        '• `english-m` — Male (Guy)',
+        '• `english-f` — Female (Aria)',
         '',
-        '💡 *Use:* `.tts jarvis hello bhai`',
-        '',
-        '📌 *Powered by* Edge-TTS (Free)'
+        '💡 *Use:* `.tts jarvis hello bhai`'
     ].join('\n'));
 });
 
@@ -155,32 +192,101 @@ cmd({
     use: '.jarvis <text>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!EdgeTTS) return ctx.reply('❌ Install karo: `npm install edge-tts-universal`');
-    if (!ctx.q) return ctx.reply('Use: `.jarvis hello boss kya haal hai`');
+    if (!EdgeTTS) return ctx.reply('❌ Install: `npm install edge-tts-universal`');
+    if (!ctx.q) return ctx.reply('Use: `.jarvis hello boss`');
 
     await conn.sendMessage(ctx.from, { react: { text: '🤖', key: mek.key } });
 
     try {
-        const tts = new EdgeTTS(ctx.q, 'ur-PK-AsadNeural');
+        const tts = new EdgeTTS(ctx.q.slice(0, 500), 'ur-PK-AsadNeural');
         const result = await tts.synthesize();
         const audioBuffer = Buffer.from(await result.audio.arrayBuffer());
 
-        const tempFile = path.join(__dirname, '..', 'tmp', `jarvis_${Date.now()}.mp3`);
-        fs.ensureDirSync(path.dirname(tempFile));
-        await fs.writeFile(tempFile, audioBuffer);
+        const tmpDir = path.join(__dirname, '..', 'tmp');
+        fs.ensureDirSync(tmpDir);
 
-        await conn.sendMessage(ctx.from, {
-            audio: { url: tempFile },
-            mimetype: 'audio/mpeg',
-            ptt: true,
-            fileName: `jarvis_${Date.now()}.mp3`
-        }, { quoted: mek });
+        const mp3File = path.join(tmpDir, `jarvis_${Date.now()}.mp3`);
+        const oggFile = path.join(tmpDir, `jarvis_${Date.now()}.ogg`);
 
-        fs.remove(tempFile).catch(() => {});
+        await fs.writeFile(mp3File, audioBuffer);
+        const converted = await mp3ToOgg(mp3File, oggFile);
+
+        if (converted) {
+            await conn.sendMessage(ctx.from, {
+                audio: { url: oggFile },
+                mimetype: 'audio/ogg; codecs=opus',
+                ptt: true
+            }, { quoted: mek });
+        } else {
+            await conn.sendMessage(ctx.from, {
+                audio: { url: mp3File },
+                mimetype: 'audio/mpeg',
+                ptt: true
+            }, { quoted: mek });
+        }
+
+        fs.remove(mp3File).catch(() => {});
+        fs.remove(oggFile).catch(() => {});
         await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
 
     } catch (e) {
         console.error('jarvis error:', e.message);
+        await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
+        return ctx.reply('❌ Voice fail: ' + e.message);
+    }
+});
+
+// ===========================================================
+// 4. RAJU — Raju style voice (same as Jarvis but different alias)
+// ===========================================================
+cmd({
+    pattern: 'raju',
+    alias: ['rajuvoice'],
+    desc: 'Raju style voice',
+    category: 'fun',
+    react: '🎤',
+    use: '.raju <text>',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    if (!EdgeTTS) return ctx.reply('❌ Install: `npm install edge-tts-universal`');
+    if (!ctx.q) return ctx.reply('Use: `.raju kya haal hai`');
+
+    await conn.sendMessage(ctx.from, { react: { text: '🎤', key: mek.key } });
+
+    try {
+        const tts = new EdgeTTS(ctx.q.slice(0, 500), 'ur-PK-AsadNeural');
+        const result = await tts.synthesize();
+        const audioBuffer = Buffer.from(await result.audio.arrayBuffer());
+
+        const tmpDir = path.join(__dirname, '..', 'tmp');
+        fs.ensureDirSync(tmpDir);
+
+        const mp3File = path.join(tmpDir, `raju_${Date.now()}.mp3`);
+        const oggFile = path.join(tmpDir, `raju_${Date.now()}.ogg`);
+
+        await fs.writeFile(mp3File, audioBuffer);
+        const converted = await mp3ToOgg(mp3File, oggFile);
+
+        if (converted) {
+            await conn.sendMessage(ctx.from, {
+                audio: { url: oggFile },
+                mimetype: 'audio/ogg; codecs=opus',
+                ptt: true
+            }, { quoted: mek });
+        } else {
+            await conn.sendMessage(ctx.from, {
+                audio: { url: mp3File },
+                mimetype: 'audio/mpeg',
+                ptt: true
+            }, { quoted: mek });
+        }
+
+        fs.remove(mp3File).catch(() => {});
+        fs.remove(oggFile).catch(() => {});
+        await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
+
+    } catch (e) {
+        console.error('raju error:', e.message);
         await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
         return ctx.reply('❌ Voice fail: ' + e.message);
     }
