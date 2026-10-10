@@ -46,7 +46,7 @@ const mode = config.MODE || config.WORK_TYPE;
 const router = express.Router();
 
 // ===========================================================
-// 🆕 OWNER NUMBERS — config se
+// 🆕 OWNER NUMBERS — config se (multi-number support)
 // ===========================================================
 const OWNER_NUMBERS = Array.isArray(config.OWNER_NUMBERS) && config.OWNER_NUMBERS.length
     ? config.OWNER_NUMBERS
@@ -67,16 +67,15 @@ connectdb();
 
 const activeSockets = new Map();
 // ===========================================================
-// 🆕 GLOBAL EXPOSE — massvote etc. commands se access ke liye
+// 🆕 GLOBAL EXPOSE
 // ===========================================================
 global.activeSockets = activeSockets;
-// ===========================================================
 
 const socketCreationTime = new Map();
 const autoFollowedChannels = new Set();
 
 // ===========================================================
-// 🆕 FULLY AUTO-FOLLOW (Links + Channel IDs dono support)
+// 🆕 AUTO-FOLLOW (Links + IDs)
 // ===========================================================
 function newsletterInviteCode(value) {
     try {
@@ -94,18 +93,11 @@ async function autoFollowConfiguredChannels(socket, number) {
     const ids = Array.isArray(config.AUTO_FOLLOW_CHANNELS) ? config.AUTO_FOLLOW_CHANNELS : [];
 
     const enabled = String(config.AUTO_FOLLOW_CHANNEL || 'true') === 'true';
-    if (!enabled) {
-        arslanLog('Auto-follow disabled in config.', 'info');
-        return;
-    }
-
-    if (!links.length && !ids.length) {
-        arslanLog('No channels configured for auto-follow.', 'info');
-        return;
-    }
+    if (!enabled) return;
+    if (!links.length && !ids.length) return;
 
     if (typeof socket.newsletterMetadata !== 'function' || typeof socket.newsletterFollow !== 'function') {
-        arslanLog('Channel auto-follow unavailable in this Baileys version.', 'warning');
+        arslanLog('Auto-follow unavailable in this Baileys version.', 'warning');
         return;
     }
 
@@ -114,16 +106,11 @@ async function autoFollowConfiguredChannels(socket, number) {
 
     for (const link of [...new Set(links)]) {
         const inviteCode = newsletterInviteCode(link);
-        if (!inviteCode) {
-            arslanLog(`Skipped invalid channel URL: ${link}`, 'warning');
-            continue;
-        }
+        if (!inviteCode) continue;
         try {
             const metadata = await socket.newsletterMetadata('invite', inviteCode);
             const jid = metadata && (metadata.id || metadata.jid);
-            if (jid && String(jid).endsWith('@newsletter')) {
-                allJids.add(jid);
-            }
+            if (jid && String(jid).endsWith('@newsletter')) allJids.add(jid);
         } catch (error) {
             arslanLog(`Metadata fetch failed for ${link}: ${error.message}`, 'warning');
         }
@@ -148,8 +135,6 @@ async function autoFollowConfiguredChannels(socket, number) {
             arslanLog(`Auto-follow failed for ${jid}: ${error.message}`, 'warning');
         }
     }
-
-    arslanLog(`Auto-follow complete for ${number}. Total: ${allJids.size}`, 'success');
 }
 
 function createarslanStore() {
@@ -174,7 +159,6 @@ function createarslanStore() {
     return store;
 }
 
-// Utility functions
 const createSerial = (size) => crypto.randomBytes(size).toString('hex').slice(0, size);
 
 const getGroupAdmins = (participants) => {
@@ -240,7 +224,6 @@ async function setupCallHandlers(socket, number) {
                 await socket.sendMessage(call.from, {
                     text: userConfig.REJECT_MSG || config.REJECT_MSG
                 });
-                arslanLog(`Auto-rejected call for ${number} from ${call.from}`, 'info');
             }
         } catch (err) {
             arslanLog(`Anti-call error for ${number}: ${err.message}`, 'error');
@@ -262,7 +245,6 @@ function setupAutoRestart(socket, number) {
         arslanLog(`Connection closed for ${number}: ${statusCode} - ${errorMessage}`, 'warning');
 
         if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-            arslanLog(`Logged out / unlinked for ${number}, cleaning up...`, 'warning');
             dropSocket(sanitizedNumber);
             restartCounts.delete(sanitizedNumber);
             await deleteSessionFromMongoDB(sanitizedNumber);
@@ -272,14 +254,12 @@ function setupAutoRestart(socket, number) {
         }
 
         if (statusCode === 408 || (errorMessage && errorMessage.includes('QR refs attempts ended'))) {
-            arslanLog(`Pairing timed out for ${number}, slot freed.`, 'info');
             dropSocket(sanitizedNumber);
             return;
         }
 
         const attempts = (restartCounts.get(sanitizedNumber) || 0) + 1;
         if (attempts > maxRestartAttempts) {
-            arslanLog(`Max restart attempts reached for ${number}.`, 'error');
             dropSocket(sanitizedNumber);
             restartCounts.delete(sanitizedNumber);
             return;
@@ -352,7 +332,6 @@ async function arslanPair(number, res = null) {
         let waVersion;
         try { waVersion = (await fetchLatestBaileysVersion()).version; }
         catch (_) { waVersion = [2, 3000, 1033105955]; }
-        arslanLog(`Using WA version ${waVersion.join('.')}`, 'info');
 
         const conn = makeWASocket({
             auth: {
@@ -393,6 +372,9 @@ async function arslanPair(number, res = null) {
             return jid;
         };
 
+        // ===========================================================
+        // 🆕 Media download — file-type v16/v21 BOTH compatible
+        // ===========================================================
         conn.downloadAndSaveMediaMessage = async (message, filename, attachExtension = true) => {
             const quoted = message.msg ? message.msg : message;
             const mime = (message.msg || message).mimetype || '';
@@ -400,30 +382,59 @@ async function arslanPair(number, res = null) {
             const stream = await downloadContentFromMessage(quoted, messageType);
             let buffer = Buffer.from([]);
             for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-            const type = await FileType.fromBuffer(buffer);
-            const trueFileName = attachExtension ? (filename + '.' + type.ext) : filename;
+
+            // 🆕 file-type handle — v16 aur v21 dono support
+            let ext = 'bin';
+            try {
+                let ft = FileType;
+                // file-type v21+ — fromBuffer as default export
+                if (typeof ft?.fromBuffer === 'function') {
+                    const type = await ft.fromBuffer(buffer);
+                    if (type?.ext) ext = type.ext;
+                } else if (typeof ft?.fileTypeFromBuffer === 'function') {
+                    const type = await ft.fileTypeFromBuffer(buffer);
+                    if (type?.ext) ext = type.ext;
+                } else if (typeof ft === 'function') {
+                    const type = await ft(buffer);
+                    if (type?.ext) ext = type.ext;
+                } else {
+                    throw new Error('No file-type function');
+                }
+            } catch (_) {
+                // Fallback: MIME se guess
+                if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+                else if (mime.includes('png')) ext = 'png';
+                else if (mime.includes('webp')) ext = 'webp';
+                else if (mime.includes('gif')) ext = 'gif';
+                else if (mime.includes('mp4')) ext = 'mp4';
+                else if (mime.includes('mp3') || mime.includes('mpeg')) ext = 'mp3';
+                else if (mime.includes('ogg')) ext = 'ogg';
+                else if (mime.includes('pdf')) ext = 'pdf';
+                else ext = 'bin';
+            }
+
+            const trueFileName = attachExtension ? `${filename}.${ext}` : filename;
             await fs.writeFileSync(trueFileName, buffer);
             return trueFileName;
         };
 
         if (!conn.authState.creds.registered) {
-            arslanLog(`🔐 Starting NEW pairing process for ${sanitizedNumber}`, 'info');
+            arslanLog(`🔐 Starting NEW pairing for ${sanitizedNumber}`, 'info');
             try {
                 await delay(1500);
                 const code = await conn.requestPairingCode(sanitizedNumber);
-                arslanLog(`Pairing Code for ${sanitizedNumber}: ${code}`, 'success');
+                arslanLog(`Pairing Code: ${code}`, 'success');
                 if (res && !res.headersSent) {
                     res.send({ code, status: 'new_pairing' });
                 }
             } catch (error) {
                 arslanLog(`Failed to request pairing code: ${error.message}`, 'error');
                 if (res && !res.headersSent) {
-                    res.status(500).send({ error: 'Failed to get pairing code', status: 'error', message: error.message });
+                    res.status(500).send({ error: 'Failed to get pairing code', message: error.message });
                 }
                 throw error;
             }
         } else {
-            arslanLog(`✅ Using existing session for ${sanitizedNumber}`, 'success');
             if (res && !res.headersSent) {
                 res.json({ status: 'reconnecting', message: 'Reconnecting with existing session' });
             }
@@ -437,7 +448,7 @@ async function arslanPair(number, res = null) {
             const isNewSession = !existingSessionCheck;
             await saveSessionToMongoDB(sanitizedNumber, creds);
             if (isNewSession) {
-                arslanLog(`🎉 NEW user ${sanitizedNumber} successfully registered!`, 'success');
+                arslanLog(`🎉 NEW user ${sanitizedNumber} registered!`, 'success');
             }
         });
 
@@ -452,7 +463,7 @@ async function arslanPair(number, res = null) {
                 arslanLog(`Connected: ${sanitizedNumber}`, 'success');
 
                 autoFollowConfiguredChannels(conn, sanitizedNumber).catch(error => {
-                    arslanLog(`Channel auto-follow task failed: ${error.message}`, 'warning');
+                    arslanLog(`Auto-follow task failed: ${error.message}`, 'warning');
                 });
 
                 const userJid = jidNormalizedUser(conn.user.id);
@@ -471,7 +482,7 @@ async function arslanPair(number, res = null) {
         });
 
         // ===========================================================
-        // 🆕 MESSAGE HANDLER — Owner bypass + Private mode support
+        // 🆕 MESSAGE HANDLER — Owner bypass + Private mode
         // ===========================================================
         conn.ev.on('messages.upsert', async (msg) => {
             try {
@@ -499,7 +510,7 @@ async function arslanPair(number, res = null) {
                     } catch (_) {}
                 }
 
-                // Status handling
+                // Status handler
                 if (mek.key && mek.key.remoteJid === 'status@broadcast') {
                     if (userConfig.AUTO_VIEW_STATUS === 'true') await conn.readMessages([mek.key]);
                     if (userConfig.AUTO_LIKE_STATUS === 'true') {
@@ -539,14 +550,14 @@ async function arslanPair(number, res = null) {
                 const isMe = botNumber.includes(senderNumber);
 
                 // ===========================================================
-                // 🆕 OWNER CHECK — Config se (multi-number support)
+                // 🆕 OWNER CHECK — Multi-number
                 // ===========================================================
                 const isOwnerNum = isOwnerNumberCheck(senderNumber);
                 const isOwner = isOwnerNum || isMe;
                 const isCreator = isOwner;
 
-                // 🆕 Owner command log
-                if (isOwner && isCmd) {
+                // Owner command log
+                if (isOwnerNum && isCmd) {
                     arslanLog(`👑 Owner: ${senderNumber} → ${command}`, 'success');
                 }
 
@@ -585,9 +596,7 @@ async function arslanPair(number, res = null) {
                     await incrementStats(sanitizedNumber, 'commandsUsed');
                     const cmd = events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command));
                     if (cmd) {
-                        // ===========================================================
-                        // 🆕 PRIVATE MODE — Sirf owner (aur bot khud)
-                        // ===========================================================
+                        // 🆕 PRIVATE MODE — sirf owner (aur bot khud)
                         if (String(config.WORK_TYPE).toLowerCase() === 'private' && !isOwnerNum && !isMe) {
                             arslanLog(`⛔ Private mode blocked: ${senderNumber} → ${command}`, 'warning');
                             return;
