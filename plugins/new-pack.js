@@ -6,24 +6,13 @@ const os = require('os');
 const crypto = require('crypto');
 const axios = require('axios');
 
-function cleanNumber(value) {
-    let n = String(value || '').replace(/\D/g, '');
-    if (n.startsWith('0')) n = `${config.DEFAULT_COUNTRY_CODE}${n.slice(1)}`;
-    return n;
-}
-
-function isOwner(ctx) {
-    return cleanNumber(ctx.senderNumber) === cleanNumber(config.OWNER_NUMBER);
-}
-
-async function isPremiumOrOwner(ctx) {
-    if (isOwner(ctx)) return true;
-    try {
-        const { countReferralsForNumber } = require('../lib/database');
-        const count = await countReferralsForNumber(ctx.senderNumber);
-        return count >= Math.max(1, Number(config.PREMIUM_REFERRALS) || 4);
-    } catch { return false; }
-}
+// 🆕 Universal premium system (owner bypass + promo + referral)
+const {
+    isOwner,
+    isPremiumUser,
+    requirePremium,
+    cleanNumber
+} = require('../lib/premium-check');
 
 function formatBytes(b) {
     if (b < 1024) return b + ' B';
@@ -40,7 +29,7 @@ function formatUptime(s) {
 }
 
 // ===========================================================
-// 1. ADDSTICKER-PACK — Sticker pack create
+// 1. STICKERPACK
 // ===========================================================
 cmd({
     pattern: 'stickerpack',
@@ -73,7 +62,7 @@ cmd({
 });
 
 // ===========================================================
-// 2. BLUR — Image ko blur karo
+// 2. BLUR
 // ===========================================================
 cmd({
     pattern: 'blur',
@@ -100,7 +89,7 @@ cmd({
 });
 
 // ===========================================================
-// 3. SEPIA — Image ko sepia tone
+// 3. SEPIA
 // ===========================================================
 cmd({
     pattern: 'sepia',
@@ -125,7 +114,7 @@ cmd({
 });
 
 // ===========================================================
-// 4. FLIP — Image ko flip karo (mirror)
+// 4. FLIP
 // ===========================================================
 cmd({
     pattern: 'flip',
@@ -155,7 +144,7 @@ cmd({
 });
 
 // ===========================================================
-// 5. EMOJIMIX — Do emojis ko mix karo
+// 5. EMOJIMIX
 // ===========================================================
 cmd({
     pattern: 'emojimix',
@@ -179,7 +168,7 @@ cmd({
 });
 
 // ===========================================================
-// 6. ATT P — Anti-Delete Trigger (ye vv nahi hai, alag)
+// 6. ANTIDELETE STATUS
 // ===========================================================
 cmd({
     pattern: 'antidelete',
@@ -201,7 +190,7 @@ cmd({
 });
 
 // ===========================================================
-// 7. TAGME — Khud ko tag karo
+// 7. TAGME
 // ===========================================================
 cmd({
     pattern: 'tagme',
@@ -217,7 +206,7 @@ cmd({
 });
 
 // ===========================================================
-// 8. STATS — Bot usage stats
+// 8. BOTSTATS
 // ===========================================================
 cmd({
     pattern: 'botstats',
@@ -241,7 +230,7 @@ cmd({
 });
 
 // ===========================================================
-// 9. RANDOM PICK — List me se random pick
+// 9. RANDOM PICK
 // ===========================================================
 cmd({
     pattern: 'random',
@@ -259,7 +248,7 @@ cmd({
 });
 
 // ===========================================================
-// 10. NICKNAME — Kisi ko nickname do
+// 10. NICKNAME
 // ===========================================================
 cmd({
     pattern: 'nickname',
@@ -282,7 +271,7 @@ cmd({
 });
 
 // ===========================================================
-// 11. AGE GUESS — Random age
+// 11. AGE
 // ===========================================================
 cmd({
     pattern: 'age',
@@ -306,7 +295,7 @@ cmd({
 });
 
 // ===========================================================
-// 12. HOWGAY — Fun meter
+// 12. HOWGAY
 // ===========================================================
 cmd({
     pattern: 'howgay',
@@ -328,7 +317,7 @@ cmd({
 });
 
 // ===========================================================
-// 13. ROAST — Random roast
+// 13. ROAST
 // ===========================================================
 cmd({
     pattern: 'roast',
@@ -349,7 +338,7 @@ cmd({
 });
 
 // ===========================================================
-// 14. COMPLIMENT — Kisi ko compliment
+// 14. COMPLIMENT
 // ===========================================================
 cmd({
     pattern: 'compliment',
@@ -380,7 +369,7 @@ cmd({
 });
 
 // ===========================================================
-// 15. PING CHECK — Full latency check
+// 15. PINGS
 // ===========================================================
 cmd({
     pattern: 'pings',
@@ -406,7 +395,7 @@ cmd({
 });
 
 // ===========================================================
-// 16. WHOIS — Kisi ki info
+// 16. WHOIS
 // ===========================================================
 cmd({
     pattern: 'whois',
@@ -436,7 +425,7 @@ cmd({
 });
 
 // ===========================================================
-// 17. SLOGAN — Random slogan
+// 17. SLOGAN
 // ===========================================================
 cmd({
     pattern: 'slogan',
@@ -457,7 +446,7 @@ cmd({
 });
 
 // ===========================================================
-// 18. PRAYER TIMES — Namaz ka waqt (Pakistan)
+// 18. NAMAZ
 // ===========================================================
 cmd({
     pattern: 'namaz',
@@ -485,7 +474,7 @@ cmd({
 });
 
 // ===========================================================
-// 19. PRAYER DUAS — Random dua
+// 19. DUA
 // ===========================================================
 cmd({
     pattern: 'dua',
@@ -505,7 +494,7 @@ cmd({
 });
 
 // ===========================================================
-// 20. LIVE SCORE — Cricket match score (fun)
+// 20. LIVESCORE
 // ===========================================================
 cmd({
     pattern: 'livescore',
