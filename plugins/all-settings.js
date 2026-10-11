@@ -1,5 +1,5 @@
 const { cmd } = require('../arslan');
-const { updateUserConfig } = require('../lib/database');
+const { updateUserConfigInMongoDB } = require('../lib/database');
 
 // Helper function to update config in memory and database
 const updateConfig = async (key, value, botNumber, config, reply) => {
@@ -11,12 +11,13 @@ const updateConfig = async (key, value, botNumber, config, reply) => {
         const newConfig = { ...config }; 
         newConfig[key] = value;
         
-        await updateUserConfig(botNumber, newConfig);
+        const saved = await updateUserConfigInMongoDB(String(botNumber || ''), newConfig);
+        if (!saved) throw new Error('Database update returned false');
         
         return reply(`✅ *${key}* has been updated to: *${value}*`);
     } catch (e) {
         console.error(e);
-        return reply("❌ Error while saving to database.");
+        return reply("❌ Database save nahi hua. MongoDB URI/connection check karo aur phir dobara try karo.");
     }
 };
 

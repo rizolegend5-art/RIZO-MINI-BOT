@@ -558,14 +558,5 @@ cmd({
     return ctx.reply(`🔢 *Counting ${num}:*\n\n${count}`);
 });
 
-// 23. DAY-NAME — Date se day name
-cmd({
-    pattern: 'dayname',
-    alias: ['whatday'],
-    desc: 'Date ka day name',
-    category: 'tools',
-    react: '📅',
-    use: '.dayname 2026-10-10',
-    filename: __filename
-}, async (conn, mek, m, ctx) => {
-    const date = new Dat
+// NOTE: The following command in the supplied ZIP was truncated and has been omitted
+// so this plugin can load safely. Restore it from a complete source before re-adding.

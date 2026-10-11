@@ -26,80 +26,98 @@ async function downloadWithRetry(url, format = '360', retries = 3) {
 }
 
 // ===========================================================
-// ISLAMIC CARTOON — Bachon ke Islamic cartoons download
+// ISLAMIC CARTOON — Prefer full episodes, skip Shorts/short clips
 // ===========================================================
 cmd({
     pattern: 'islamiccartoon',
     alias: ['icartoon', 'deenicartoon', 'kidscartoon'],
-    desc: 'Islamic cartoon download (video)',
+    desc: 'Find full-length Islamic cartoon episodes',
     category: 'islamic',
     react: '📺',
-    use: '.islamiccartoon <name | youtube link>',
+    use: '.islamiccartoon <cartoon name>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     const query = (ctx.q || '').trim();
     if (!query) {
         return ctx.reply([
-            '📺 *Islamic Cartoon Downloader*',
+            '📺 *ISLAMIC CARTOON — FULL EPISODE SEARCH*',
             '',
             'Use: `.islamiccartoon <name>`',
             '',
-            '*Popular cartoons:*',
-            '• `.islamiccartoon Omar and Hana`',
-            '• `.islamiccartoon Ghulam Rasool`',
-            '• `.islamiccartoon Musa and Amina`',
-            '• `.islamiccartoon Prophet Stories`',
-            '• `.islamiccartoon The Jar Tale East`'
+            'Examples:',
+            '• `.islamiccartoon Omar and Hana full episode`',
+            '• `.islamiccartoon Prophet Stories full episode`',
+            '• `.islamiccartoon Musa and Amina episode`',
+            '',
+            '🔎 Main 4-minute se lambi videos ko prefer karta hai aur Shorts/15-second clips ko skip karta hai.',
+            'ℹ️ Full episode ka watch link bhejega; download provider agar sirf preview de to usay full episode keh kar nahi bhejega.'
         ].join('\n'));
     }
 
     try {
-        let videoUrl;
-        let videoTitle;
-        let videoThumbnail;
-
-        if (query.startsWith('http://') || query.startsWith('https://')) {
-            videoUrl = query;
+        const yts = require('yt-search');
+        const searchQuery = query.startsWith('http') ? query : `${query} Islamic cartoon full episode`;
+        let candidates = [];
+        if (query.startsWith('http')) {
+            // For supplied links, find metadata through YouTube search when possible.
+            const idMatch = query.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([a-zA-Z0-9_-]{11})/);
+            if (!idMatch) return ctx.reply('❌ YouTube link sahi nahi lag raha. Cartoon ka naam likh kar try karo.');
+            const result = await yts({ videoId: idMatch[1] });
+            if (result && result.videoId) candidates = [result];
         } else {
-            const yts = require('yt-search');
-            const searchQuery = `${query} islamic cartoon`;
-            const { videos } = await yts(searchQuery);
-            if (!videos?.length) {
-                return ctx.reply('❌ Koi cartoon nahi mila!');
-            }
-            videoUrl = videos[0].url;
-            videoTitle = videos[0].title;
-            videoThumbnail = videos[0].thumbnail;
+            const result = await yts(searchQuery);
+            candidates = result?.videos || [];
+        }
+        const durationSeconds = (v) => {
+            if (typeof v.seconds === 'number') return v.seconds;
+            const d = String(v.timestamp || v.duration || '');
+            const parts = d.split(':').map(Number);
+            if (!parts.length || parts.some(Number.isNaN)) return 0;
+            return parts.reduce((total, part) => total * 60 + part, 0);
+        };
+        const full = candidates.filter(v => {
+            const title = String(v.title || '').toLowerCase();
+            const seconds = durationSeconds(v);
+            return seconds >= 240 && !/\b(shorts?|15\s*seconds?|15\s*sec|clip|teaser|trailer)\b/i.test(title);
+        }).sort((a,b) => durationSeconds(b) - durationSeconds(a));
+
+        if (!full.length) {
+            const fallback = candidates.find(v => v.url && !/shorts/i.test(String(v.url)));
+            return ctx.reply([
+                '😕 4 minute se lambi full episode nahi mili.',
+                '',
+                'Try karo: `.islamiccartoon Omar and Hana full episode Urdu`',
+                fallback ? `\n🔎 Jo result mila (duration verify nahi hui):\n${fallback.title}\n${fallback.url}` : '',
+                '',
+                'Tip: official channel ka full-episode link use karo. Kuch download services video ko 15-second preview tak limit karti hain.'
+            ].filter(Boolean).join('\n'));
         }
 
-        const validYT = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([a-zA-Z0-9_-]{11})/);
-        if (!validYT) {
-            return ctx.reply('❌ Valid YouTube link nahi!');
+        const chosen = full[0];
+        const seconds = durationSeconds(chosen);
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        const title = String(chosen.title || 'Islamic Cartoon Full Episode').slice(0, 180);
+        const thumb = chosen.thumbnail || chosen.image;
+        const caption = [
+            '📺 *ISLAMIC CARTOON — FULL EPISODE*',
+            '',
+            `🎬 *${title}*`,
+            `⏱️ Duration: *${mins}m ${String(secs).padStart(2,'0')}s*`,
+            '',
+            '▶️ *Full episode yahan dekho:*',
+            chosen.url,
+            '',
+            '💚 RIZO HELL-MD | Shorts aur bohat choti clips ko filter kiya gaya hai.'
+        ].join('\n');
+        if (thumb) {
+            await conn.sendMessage(ctx.from, { image: { url: thumb }, caption }, { quoted: mek });
+        } else {
+            await ctx.reply(caption);
         }
-
-        const ytId = validYT[1];
-        const thumb = videoThumbnail || `https://i.ytimg.com/vi/${ytId}/sddefault.jpg`;
-
-        await conn.sendMessage(ctx.from, {
-            image: { url: thumb },
-            caption: `📺 *ISLAMIC CARTOON*\n\n🎬 *${videoTitle || query}*\n⬇️ Downloading... *(30-60s lag sakte hain)*`
-        }, { quoted: mek });
-
-        const videoData = await downloadWithRetry(videoUrl, '360');
-
-        await conn.sendMessage(ctx.from, {
-            video: { url: videoData.downloadUrl },
-            mimetype: 'video/mp4',
-            fileName: `${videoData.title || videoTitle || 'cartoon'}.mp4`,
-            caption: `📺 *${videoData.title || videoTitle || 'Islamic Cartoon'}*\n\n> *_Downloaded by ${config.BOT_NAME}_*`
-        }, { quoted: mek });
-
     } catch (err) {
         console.error('[ISLAMIC CARTOON] Error:', err.message);
-        const reason = err.response?.status === 408
-            ? 'Download timeout. Dobara try karo.'
-            : err.message;
-        await ctx.reply(`❌ Download fail: ${reason}`);
+        await ctx.reply('❌ Search abhi fail ho rahi hai. Thori dair baad dobara try karo.');
     }
 });
 

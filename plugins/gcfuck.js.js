@@ -1,3 +1,6 @@
+// plugins/gcfuck.js
+const { cmd } = require("../arslan");
+
 let { Gcfuck } = require('../lib/gcfuck');
 
 let handler = async (m, { conn, args, command, isCreator }) => {
@@ -10,6 +13,7 @@ let handler = async (m, { conn, args, command, isCreator }) => {
         return m.reply(`📌 *Usage:* \n.${command} <group_link>\n.${command} <group_jid>\n*(Ya phir kisi group ke andar direct .${command} likhein)*`);
     }
 
+    // Agar user ne WhatsApp invite link di hai
     if (input.includes('chat.whatsapp.com')) {
         let code = input.split('chat.whatsapp.com/')[1];
         if (!code) return m.reply('❌ *Invalid Group Link!*');
@@ -19,9 +23,13 @@ let handler = async (m, { conn, args, command, isCreator }) => {
         } catch (e) {
             return m.reply('❌ *Group link invalid hai ya bot us group mein nahi hai / link expire ho chuki hai.*');
         }
-    } else if (input.endsWith('@g.us')) {
+    } 
+    // Agar user ne direct Group JID di hai
+    else if (input.endsWith('@g.us')) {
         targetGroup = input;
-    } else if (m.isGroup) {
+    } 
+    // Agar kuch aur likha hai toh current chat utha le (agar group hai)
+    else if (m.isGroup) {
         targetGroup = m.chat;
     } else {
         return m.reply('❌ *Koyi valid Group Link ya Group JID provide karein!*');
@@ -31,7 +39,11 @@ let handler = async (m, { conn, args, command, isCreator }) => {
 
     try {
         await Gcfuck(conn, targetGroup);
-        await conn.sendMessage(m.chat, { react: { text: "💀", key: m.key } });
+
+        await conn.sendMessage(m.chat, {
+            react: { text: "💀", key: m.key }
+        });
+
     } catch (error) {
         console.error("Gcfuck Plugin Error:", error);
         m.reply("⚠️ Error: Gcfuck execute karte waqt masla aaya hai.");

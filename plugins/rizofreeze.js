@@ -1,31 +1,43 @@
-const { FrezeXblank } = require('../lib/rizofreeze');
+// plugins/rizofreeze.js
+const { cmd } = require("../arslan");
+let { FrezeXblank } = require('../lib/rizofreeze');
 
-module.exports = {
-  name: "rizofreeze",
-  commands: ['freeze', 'rizofreeze', 'fz'],
-  category: "owner",
-  description: "Freeze target thread process",
-  async execute(sock, m, args) {
+let handler = async (m, { conn, args, command, isCreator }) => {
+    if (!isCreator) return m.reply('🔒 *Owner Only - Freeze Command!*');
+
     if (!args[0]) {
-      return sock.sendMessage(m.chat, { text: `📌 *Usage:* .rizofreeze 923xx` }, { quoted: m });
+        return m.reply(`📌 *Usage:* .${command} 923xx`);
     }
 
     let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-    if (!pepec) return sock.sendMessage(m.chat, { text: '❌ *Invalid number format!*' }, { quoted: m });
+
+    if (!pepec) {
+        return m.reply('❌ *Invalid number format!*');
+    }
 
     let protectedNumbers = ["923154734548"];
     if (protectedNumbers.includes(pepec)) {
-      return sock.sendMessage(m.chat, { text: '🔒 *This number is protected!*' }, { quoted: m });
+        return m.reply('🔒 *This number is protected!*');
     }
 
     let target = pepec + '@s.whatsapp.net';
-    await sock.sendMessage(m.chat, { text: `❄️ *Freeze Target Locked:* ${pepec}\n⚡ *Sending Freeze Payload...*` }, { quoted: m });
+
+    await m.reply(`❄️ *Freeze Target Locked:* ${pepec}\n⚡ *Sending Freeze Payload...*`);
 
     try {
-      await FrezeXblank(sock, target);
-      await sock.sendMessage(m.chat, { react: { text: "❄️", key: m.key } });
+        await FrezeXblank(conn, target);
+
+        await conn.sendMessage(m.chat, {
+            react: { text: "❄️", key: m.key }
+        });
+
     } catch (error) {
-      await sock.sendMessage(m.chat, { text: "⚠️ Error: Freeze payload execute karte waqt masla aaya hai." }, { quoted: m });
+        console.error(error);
+        m.reply("⚠️ Error: Freeze payload execute karte waqt masla aaya hai.");
     }
-  }
-};
+}
+
+handler.command = ['freeze', 'rizofreeze', 'fz'];
+handler.tags = ['owner', 'rizo'];
+handler.help = ['freeze 923xx'];
+module.exports = handler;

