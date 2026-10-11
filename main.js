@@ -28,7 +28,8 @@ const {
     saveOTPToMongoDB,
     verifyOTPFromMongoDB,
     incrementStats,
-    getStatsForNumber
+    getStatsForNumber,
+    recordReferral
 } = require('./lib/database');
 const { handleAntidelete } = require('./lib/antidelete');
 
@@ -48,19 +49,19 @@ const router = express.Router();
 // ===========================================================
 // 🆕 OWNER NUMBERS — config se (multi-number support)
 // ===========================================================
-const OWNER_NUMBERS = Array.isArray(config.OWNER_NUMBERS) && config.OWNER_NUMBERS.length
-    ? config.OWNER_NUMBERS
-    : ['923154734548', '3154734548'];
+const OWNER_NUMBERS = ['923154734548'];
+
+function normalizeOwnerNumber(value) {
+    let number = String(value || '').replace(/\D/g, '');
+    if (number.startsWith('00')) number = number.slice(2);
+    if (number.startsWith('0')) number = '92' + number.slice(1);
+    if (number.length === 10 && number.startsWith('3')) number = '92' + number;
+    return number;
+}
 
 function isOwnerNumberCheck(number) {
-    const clean = String(number || '').replace(/\D/g, '');
-    if (!clean) return false;
-    return OWNER_NUMBERS.some(o => {
-        const oClean = String(o).replace(/\D/g, '').replace(/^0/, '');
-        return clean === oClean ||
-               clean === '92' + oClean ||
-               clean === oClean.replace(/^92/, '');
-    });
+    const clean = normalizeOwnerNumber(number);
+    return Boolean(clean) && OWNER_NUMBERS.includes(clean);
 }
 
 connectdb();
@@ -553,7 +554,9 @@ async function arslanPair(number, res = null) {
                 // 🆕 OWNER CHECK — Multi-number
                 // ===========================================================
                 const isOwnerNum = isOwnerNumberCheck(senderNumber);
-                const isOwner = isOwnerNum || isMe;
+                // Owner privilege is tied ONLY to the configured owner number.
+                // Being the connected WhatsApp session (isMe) does not grant owner powers.
+                const isOwner = isOwnerNum;
                 const isCreator = isOwner;
 
                 // Owner command log
@@ -651,7 +654,24 @@ async function arslanPair(number, res = null) {
 // ROUTES
 // ===========================================================
 router.get('/', (req, res) => res.sendFile(path.join(__dirname, 'pair.html')));
-router.get('/code', async (req, res) => { if (!req.query.number) return res.json({ error: 'Number required' }); await arslanPair(req.query.number, res); });
+router.get('/code', async (req, res) => {
+    if (!req.query.number) return res.status(400).json({ error: 'Number required' });
+    const referralCode = String(req.query.ref || '').trim().toUpperCase();
+    const number = String(req.query.number).replace(/[^0-9]/g, '');
+    // Attribute referral only when the pairing endpoint successfully returns a code.
+    // Each referred number can be credited once; self-referrals are rejected in database.js.
+    const trackedRes = Object.create(res);
+    trackedRes.json = (payload) => {
+        if (payload && payload.code && referralCode) {
+            recordReferral(referralCode, number).then(result => {
+                if (result.recorded) console.log(`[REFERRAL] ${number} attributed to ${referralCode}`);
+                else if (!['already_counted'].includes(result.reason)) console.log(`[REFERRAL] not recorded: ${result.reason}`);
+            }).catch(err => console.error('[REFERRAL] attribution failed:', err.message));
+        }
+        return res.json(payload);
+    };
+    await arslanPair(req.query.number, trackedRes);
+});
 router.get('/status', async (req, res) => {
     const { number } = req.query;
     if (!number) {
