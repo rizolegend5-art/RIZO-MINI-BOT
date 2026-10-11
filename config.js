@@ -10,7 +10,7 @@ module.exports = {
     // 1. SESSION & DATABASE
     // ===========================================================
     SESSION_ID: process.env.SESSION_ID || "MINI BOT",
-    MONGODB_URI: process.env.MONGODB_URI || "",
+    MONGODB_URI: process.env.MONGODB_URI || "mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/DATABASE?retryWrites=true&w=majority",
 
     // ===========================================================
     // 2. BOT INFO
