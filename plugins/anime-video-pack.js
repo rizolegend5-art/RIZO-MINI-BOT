@@ -1,15 +1,11 @@
 const { cmd } = require('../arslan');
-const axios = require('axios');
+const { jikanGet } = require('../lib/jikan');
 
 const API = 'https://api.jikan.moe/v4';
 const clean = (value, max = 180) => String(value || 'N/A').replace(/[\r\n]+/g, ' ').slice(0, max);
 
 async function api(path) {
-    const response = await axios.get(`${API}${path}`, {
-        timeout: 15000,
-        headers: { 'User-Agent': 'RIZO-HELL-MD/2.3 anime-video-commands' }
-    });
-    return response.data;
+    return jikanGet(`${API}${path}`);
 }
 
 async function searchAnime(query) {

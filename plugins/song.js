@@ -1,388 +1,98 @@
-// ============================================
-// RIZO HELL-MD | SONG + LYRICS COMMANDS
-// Railway Deployment
-// ============================================
-
 const { cmd } = require('../arslan');
-const axios = require('axios');
+const config = require('../config');
+const youtubedl = require('youtube-dl-exec');
+const fs = require('fs-extra');
+const path = require('path');
 const yts = require('yt-search');
 
-const MUSIC_CONFIG = {
-    apiTimeout: 20000,
-    downloadTimeout: 120000,
-    maxAudioSize: 100 * 1024 * 1024,
-    userAgent: 'Mozilla/5.0'
-};
+// ===========================================================
+// 🎯 yt-dlp se audio download
+// ===========================================================
+async function downloadAudio(videoUrl) {
+    const tmpDir = path.join(__dirname, '..', 'tmp');
+    fs.ensureDirSync(tmpDir);
 
-const sleep = ms =>
-    new Promise(resolve => setTimeout(resolve, ms));
+    const output = path.join(tmpDir, `song_${Date.now()}.mp3`);
 
-// ============================================
-// MULTI API AUDIO URL
-// ============================================
+    await youtubedl(videoUrl, {
+        extractAudio: true,
+        audioFormat: 'mp3',
+        audioQuality: 0,
+        output: output,
+        noPlaylist: true,
+        noWarnings: true,
+        preferFreeFormats: true
+    });
 
-async function getAudioUrl(youtubeUrl) {
-    const encodedUrl = encodeURIComponent(youtubeUrl);
-
-    const apis = [
-        {
-            name: 'Okatsu',
-            url: `https://okatsu-rolezapiiz.vercel.app/downloader/ytmp3?url=${encodedUrl}`,
-            parse: d => d?.dl
-                ? { download: d.dl, title: d.title }
-                : null
-        },
-        {
-            name: 'Yupra',
-            url: `https://api.yupra.my.id/api/downloader/ytmp3?url=${encodedUrl}`,
-            parse: d => d?.success && d?.data?.download_url
-                ? {
-                    download: d.data.download_url,
-                    title: d.data.title
-                }
-                : null
-        },
-        {
-            name: 'EliteProTech',
-            url: `https://eliteprotech-apis.zone.id/ytdown?url=${encodedUrl}&format=mp3`,
-            parse: d => d?.success && d?.downloadURL
-                ? {
-                    download: d.downloadURL,
-                    title: d.title
-                }
-                : null
-        },
-        {
-            name: 'Vreden',
-            url: `https://api.vreden.my.id/api/ytmp3?url=${encodedUrl}`,
-            parse: d => d?.status && d?.result?.download?.url
-                ? {
-                    download: d.result.download.url,
-                    title: d.result.metadata?.title
-                }
-                : null
-        }
-    ];
-
-    for (const api of apis) {
-        try {
-            console.log(`[RIZO MUSIC] Trying ${api.name}`);
-
-            const response = await axios.get(api.url, {
-                timeout: MUSIC_CONFIG.apiTimeout,
-                headers: {
-                    'User-Agent': MUSIC_CONFIG.userAgent,
-                    'Accept': 'application/json'
-                }
-            });
-
-            const result = api.parse(response.data);
-
-            if (
-                result?.download &&
-                /^https?:\/\//i.test(result.download)
-            ) {
-                console.log(`[RIZO MUSIC] ${api.name} returned URL`);
-                return result;
-            }
-
-            console.warn(`[RIZO MUSIC] ${api.name}: invalid response`);
-
-        } catch (error) {
-            console.warn(
-                `[RIZO MUSIC] ${api.name}: ${error.message}`
-            );
-        }
+    if (!fs.existsSync(output)) {
+        throw new Error('Download failed — file not created');
     }
 
-    throw new Error('ALL_AUDIO_APIS_FAILED');
+    return output;
 }
-
-// ============================================
-// DOWNLOAD AUDIO WITH RETRIES
-// ============================================
-
-async function downloadAudioBuffer(audioUrl) {
-    let lastError;
-
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-            const response = await axios.get(audioUrl, {
-                responseType: 'arraybuffer',
-                timeout: MUSIC_CONFIG.downloadTimeout,
-                maxRedirects: 10,
-                maxContentLength: MUSIC_CONFIG.maxAudioSize,
-                headers: {
-                    'User-Agent': MUSIC_CONFIG.userAgent,
-                    'Accept': 'audio/*, application/octet-stream, */*',
-                    'Accept-Encoding': 'identity'
-                }
-            });
-
-            const contentType =
-                response.headers['content-type'] || '';
-
-            const buffer = Buffer.from(response.data);
-
-            if (
-                buffer.length < 5000 ||
-                contentType.includes('text/html') ||
-                contentType.includes('application/json')
-            ) {
-                throw new Error('Invalid audio response');
-            }
-
-            return buffer;
-
-        } catch (error) {
-            lastError = error;
-
-            console.error(
-                `[RIZO MUSIC] Download attempt ${attempt}:`,
-                error.message
-            );
-
-            if (attempt < 3) {
-                await sleep(1500);
-            }
-        }
-    }
-
-    throw lastError || new Error('Audio download failed');
-}
-
-// ============================================
-// SONG SEARCH
-// ============================================
-
-async function searchSong(query) {
-    if (/youtube\.com|youtu\.be/i.test(query)) {
-        const result = await yts(query);
-        const video = result?.videos?.[0];
-
-        if (video) return video;
-
-        return {
-            url: query,
-            title: 'YouTube Audio',
-            timestamp: 'Unknown',
-            author: { name: 'Unknown' }
-        };
-    }
-
-    const result = await yts(query);
-
-    if (!result?.videos?.length) {
-        throw new Error('NO_RESULT');
-    }
-
-    return result.videos[0];
-}
-
-// ============================================
-// SONG / PLAY / MP3 COMMAND
-// ============================================
 
 cmd({
     pattern: 'song',
-    alias: ['play', 'ytmp3', 'mp3', 'gana', 'music', 'audio'],
-    desc: 'Download song audio',
+    alias: ['ytmp3', 'play', 'mp3', 'gana', 'music', 'audio'],
+    desc: 'YouTube MP3 download (yt-dlp — no API needed)',
     category: 'download',
     react: '🎵',
-    use: '.play <song name>',
+    use: '.song <name>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     const query = (ctx.q || '').trim();
+    if (!query) return ctx.reply('🎵 Use: *.song <name>*');
 
-    if (!query) {
-        return ctx.reply(
-            '🎵 *RIZO HELL-MD MUSIC*\n\n' +
-            'Use: .play song name\n' +
-            'Example: .play Pal Pal Afusic'
-        );
-    }
-
-    await conn.sendMessage(ctx.from, {
-        react: { text: '⏳', key: mek.key }
-    });
+    await conn.sendMessage(ctx.from, { react: { text: '⏳', key: mek.key } });
 
     try {
-        const video = await searchSong(query);
+        let videoUrl, videoTitle, videoThumb;
+
+        if (query.includes('youtube.com') || query.includes('youtu.be')) {
+            videoUrl = query;
+            videoTitle = 'YouTube Audio';
+            videoThumb = '';
+        } else {
+            const search = await yts(query);
+            if (!search?.videos?.length) throw new Error('NO_RESULT');
+            const v = search.videos[0];
+            videoUrl = v.url;
+            videoTitle = v.title;
+            videoThumb = v.thumbnail;
+        }
+
+        if (videoThumb) {
+            conn.sendMessage(ctx.from, {
+                image: { url: videoThumb },
+                caption: `🎵 *${videoTitle}*\n⬇️ Downloading…`
+            }, { quoted: mek }).catch(() => {});
+        }
+
+        const audioPath = await downloadAudio(videoUrl);
 
         await conn.sendMessage(ctx.from, {
-            text:
-                '🎵 *RIZO HELL-MD*\n\n' +
-                `📌 ${video.title}\n` +
-                `🎤 ${video.author?.name || 'Unknown artist'}\n` +
-                `⏱️ ${video.timestamp || 'Unknown'}\n\n` +
-                '⬇️ Preparing audio...'
-        }, { quoted: mek });
-
-        const audioData = await getAudioUrl(video.url);
-
-        const buffer = await downloadAudioBuffer(
-            audioData.download
-        );
-
-        const filename = (
-            audioData.title || video.title || 'RIZO-Song'
-        )
-            .replace(/[\\/:*?"<>|]/g, '')
-            .slice(0, 100) + '.mp3';
-
-        await conn.sendMessage(ctx.from, {
-            audio: buffer,
+            audio: { url: audioPath },
             mimetype: 'audio/mpeg',
-            fileName: filename,
+            fileName: `${videoTitle.replace(/[^\w\s-]/g, '')}.mp3`,
             ptt: false
         }, { quoted: mek });
 
-        await conn.sendMessage(ctx.from, {
-            react: { text: '✅', key: mek.key }
-        });
+        await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
+        fs.remove(audioPath).catch(() => {});
 
-    } catch (error) {
-        console.error('[RIZO SONG ERROR]', error);
+    } catch (err) {
+        console.error('SONG ERROR:', err.message);
+        await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
 
-        await conn.sendMessage(ctx.from, {
-            react: { text: '❌', key: mek.key }
-        });
-
-        if (error.message === 'NO_RESULT') {
-            return ctx.reply('❌ Song nahi mila. Dusra naam try karo.');
-        }
-
-        if (error.message === 'ALL_AUDIO_APIS_FAILED') {
+        if (err.message === 'NO_RESULT') return ctx.reply('❌ Koi song nahi mila.');
+        if (err.message.includes('yt-dlp') || err.message.includes('ENOENT')) {
             return ctx.reply(
-                '❌ Abhi tamam audio APIs fail hain.\n' +
-                'Thori der baad dobara try karo.'
+                '❌ *yt-dlp install nahi hai!*\n\n' +
+                '💡 *Server pe install karo:*\n' +
+                '`sudo apt install yt-dlp ffmpeg`\n\n' +
+                'Ya Railway pe `nixpacks.toml` me add karo.'
             );
         }
-
-        return ctx.reply(
-            '❌ Audio download fail hua.\n' +
-            'Dusra song ya YouTube URL try karo.'
-        );
+        return ctx.reply(`❌ Song fail: ${err.message}`);
     }
 });
-
-// ============================================
-// LYRICS COMMAND
-// ============================================
-
-cmd({
-    pattern: 'lyrics',
-    alias: ['lyric'],
-    desc: 'Search song lyrics',
-    category: 'search',
-    react: '📃',
-    use: '.lyrics <song name>',
-    filename: __filename
-}, async (conn, mek, m, ctx) => {
-    const query = (ctx.q || '').trim();
-
-    if (!query) {
-        return ctx.reply(
-            '📃 *RIZO HELL-MD LYRICS*\n\n' +
-            'Use: .lyrics song name\n' +
-            'Example: .lyrics Pal Pal Afusic'
-        );
-    }
-
-    await conn.sendMessage(ctx.from, {
-        react: { text: '🔎', key: mek.key }
-    });
-
-    try {
-        const search = await yts(query);
-        const video = search?.videos?.[0];
-
-        if (!video) {
-            throw new Error('NO_RESULT');
-        }
-
-        const artist = video.author?.name || '';
-        const title = video.title || query;
-
-        // Try Lyrics.ovh first, then LRCLIB search. YouTube channel names
-        // are often not the actual artist, so LRCLIB gets the original query too.
-        let lyrics = '';
-        const lyricsQueries = [
-            async () => {
-                const response = await axios.get(
-                    `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`,
-                    { timeout: 12000, headers: { 'User-Agent': MUSIC_CONFIG.userAgent } }
-                );
-                return String(response.data?.lyrics || '').trim();
-            },
-            async () => {
-                const response = await axios.get('https://lrclib.net/api/search', {
-                    params: { q: query }, timeout: 12000,
-                    headers: { 'User-Agent': 'RIZO-HELL-MD/1.0 (WhatsApp bot)' }
-                });
-                const rows = Array.isArray(response.data) ? response.data : [];
-                const best = rows.find(row => row?.plainLyrics) || rows.find(row => row?.syncedLyrics);
-                return String(best?.plainLyrics || best?.syncedLyrics || '').trim();
-            },
-            async () => {
-                const response = await axios.get('https://lrclib.net/api/search', {
-                    params: { track_name: title, artist_name: artist }, timeout: 12000,
-                    headers: { 'User-Agent': 'RIZO-HELL-MD/1.0 (WhatsApp bot)' }
-                });
-                const rows = Array.isArray(response.data) ? response.data : [];
-                const best = rows.find(row => row?.plainLyrics) || rows.find(row => row?.syncedLyrics);
-                return String(best?.plainLyrics || best?.syncedLyrics || '').trim();
-            }
-        ];
-        for (const getLyrics of lyricsQueries) {
-            try { lyrics = await getLyrics(); if (lyrics) break; }
-            catch (apiError) { console.warn('[RIZO LYRICS] Provider fallback:', apiError.message); }
-        }
-        if (!lyrics) throw new Error('LYRICS_NOT_FOUND');
-
-        // Send in smaller chunks to avoid oversized messages.
-        const header =
-            `📃 *RIZO HELL-MD LYRICS*\n\n` +
-            `🎵 ${title}\n` +
-            `🎤 ${artist}\n\n`;
-
-        const chunks = lyrics.match(/[\s\S]{1,3000}/g) || [];
-
-        for (let i = 0; i < chunks.length; i++) {
-            await conn.sendMessage(ctx.from, {
-                text: (i === 0 ? header : '') + chunks[i]
-            }, { quoted: mek });
-        }
-
-        await conn.sendMessage(ctx.from, {
-            react: { text: '✅', key: mek.key }
-        });
-
-    } catch (error) {
-        console.error('[RIZO LYRICS ERROR]', error.message);
-
-        await conn.sendMessage(ctx.from, {
-            react: { text: '❌', key: mek.key }
-        });
-
-        if (error.message === 'NO_RESULT') {
-            return ctx.reply('❌ Song search mein nahi mila.');
-        }
-
-        if (
-            error.message === 'LYRICS_NOT_FOUND' ||
-            error.response?.status === 404
-        ) {
-            return ctx.reply(
-                '❌ Is song ke lyrics available nahi hain.\n' +
-                'Song aur artist ka naam saath likh kar try karo.'
-            );
-        }
-
-        return ctx.reply(
-            '❌ Lyrics service abhi respond nahi kar rahi. Baad mein try karo.'
-        );
-    }
-});
-
-console.log('[RIZO HELL-MD] Song and lyrics commands loaded');

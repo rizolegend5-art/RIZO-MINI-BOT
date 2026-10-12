@@ -1,2 +1,2 @@
-// Channel reaction commands are registered in plugins/referrals.js to avoid duplicate handlers.
+// Channel reaction commands are registered in plugins/channel-reactions.js.
 module.exports = {};

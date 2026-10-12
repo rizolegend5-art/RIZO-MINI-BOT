@@ -3,11 +3,30 @@ const config = require('../config');
 const axios = require('axios');
 
 // ===========================================================
-// 🎯 5 APIs for lyrics (race)
+// 🎯 LRCLIB + LyricsOVH — dono free, no API key
 // ===========================================================
 async function fetchLyrics(songName) {
     const apiCalls = [
-        // 1. lyrics.ovh
+        // 1. LRCLIB (best — synced + plain lyrics)
+        (async () => {
+            const r = await axios.get(`https://lrclib.net/api/search`, {
+                params: { q: songName },
+                timeout: 15000,
+                headers: { 'User-Agent': 'RIZO-MD-Bot/1.0' }
+            });
+            const first = r.data?.[0];
+            if (first?.plainLyrics) {
+                return {
+                    lyrics: first.plainLyrics,
+                    title: first.trackName || songName,
+                    artist: first.artistName,
+                    source: 'lrclib'
+                };
+            }
+            throw new Error('lrclib fail');
+        })(),
+
+        // 2. LyricsOVH (fallback)
         (async () => {
             const r = await axios.get(`https://api.lyrics.ovh/v1/unknown/${encodeURIComponent(songName)}`, { timeout: 15000 });
             if (r?.data?.lyrics && r.data.lyrics.length > 50) {
@@ -16,7 +35,7 @@ async function fetchLyrics(songName) {
             throw new Error('lyrics.ovh fail');
         })(),
 
-        // 2. some-random-api
+        // 3. Some-Random-API (backup)
         (async () => {
             const r = await axios.get(`https://some-random-api.com/lyrics?title=${encodeURIComponent(songName)}`, { timeout: 15000 });
             if (r?.data?.lyrics) {
@@ -28,63 +47,17 @@ async function fetchLyrics(songName) {
                     source: 'some-random-api'
                 };
             }
-            throw new Error('some-random-api fail');
-        })(),
-
-        // 3. popcat
-        (async () => {
-            const r = await axios.get(`https://api.popcat.xyz/v2/lyrics?q=${encodeURIComponent(songName)}`, { timeout: 15000 });
-            if (r?.data?.lyrics) {
-                return {
-                    lyrics: r.data.lyrics,
-                    title: r.data.title || songName,
-                    artist: r.data.artist,
-                    image: r.data.image,
-                    source: 'popcat'
-                };
-            }
-            throw new Error('popcat fail');
-        })(),
-
-        // 4. betabotz
-        (async () => {
-            const r = await axios.get(`https://api.betabotz.eu.org/api/search/lirik?lirik=${encodeURIComponent(songName)}&apikey=beta-M3DSnY0A`, { timeout: 15000 });
-            if (r?.data?.result?.lirik) {
-                return {
-                    lyrics: r.data.result.lirik,
-                    title: r.data.result.title || songName,
-                    artist: r.data.result.artist,
-                    source: 'betabotz'
-                };
-            }
-            throw new Error('betabotz fail');
-        })(),
-
-        // 5. Google scrape fallback
-        (async () => {
-            const r = await axios.get(`https://www.google.com/search?q=${encodeURIComponent(songName)}+lyrics`, {
-                timeout: 15000,
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-            });
-            const match = r.data.match(/<div[^>]*class="[^"]*lyrics[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
-            if (match) {
-                const clean = match[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
-                if (clean.length > 50) return { lyrics: clean, title: songName, source: 'google' };
-            }
-            throw new Error('google fail');
+            throw new Error('some-random fail');
         })()
     ];
 
     return await Promise.any(apiCalls);
 }
 
-// ===========================================================
-// LYRICS COMMAND
-// ===========================================================
 cmd({
     pattern: 'lyrics',
     alias: ['lyric', 'songlyrics', 'lirik', 'geet'],
-    desc: 'Song ke lyrics, artist aur image',
+    desc: 'Song ke lyrics (no API key needed)',
     category: 'music',
     react: '🎵',
     use: '.lyrics <song name>',
@@ -98,8 +71,7 @@ cmd({
             'Use: `.lyrics <song name>`\n\n' +
             'Examples:\n' +
             '• `.lyrics pal pal`\n' +
-            '• `.lyrics Tum Hi Ho`\n' +
-            '• `.lyrics Kesariya`'
+            '• `.lyrics Tum Hi Ho`'
         );
     }
 
@@ -126,11 +98,8 @@ cmd({
 
         if (data.image) {
             try {
-                await conn.sendMessage(ctx.from, {
-                    image: { url: data.image },
-                    caption
-                }, { quoted: mek });
-            } catch (imgErr) {
+                await conn.sendMessage(ctx.from, { image: { url: data.image }, caption }, { quoted: mek });
+            } catch {
                 await conn.sendMessage(ctx.from, { text: caption }, { quoted: mek });
             }
         } else {
@@ -148,8 +117,7 @@ cmd({
                 `❌ "${song}" ke lyrics nahi mile.\n\n` +
                 `💡 *Tips:*\n` +
                 `• Spelling check karo\n` +
-                `• English name try karo\n` +
-                `• Thodi der baad try karo`
+                `• English name try karo`
             );
         }
         return ctx.reply(`❌ Lyrics fail: ${err.message}`);

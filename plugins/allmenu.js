@@ -32,17 +32,17 @@ cmd({
         const icons = {
             admin: '⚙️', adult: '🔞', download: '📥', downloader: '📥',
             fun: '🎮', general: '💎', group: '👥', islamic: '🕌',
-            main: '⚡', menu: '📋', owner: '👑', premium: '💠',
+            main: '⚡', menu: '📋', owner: '👑',
             settings: '🔧', sticker: '🎨', system: '💻', tools: '🛠️',
-            music: '🎵', image: '🖼️', referrals: '🔗', misc: '📌',
+            music: '🎵', image: '🖼️', misc: '📌',
             search: '🔍', utility: '⚡', anime: '🎌'
         };
 
         const order = [
-            'premium', 'owner', 'admin', 'group', 'download', 'downloader',
+            'owner', 'admin', 'group', 'download', 'downloader',
             'music', 'islamic', 'fun', 'anime', 'tools', 'image', 'sticker',
             'settings', 'general', 'main', 'system', 'search', 'utility',
-            'misc', 'referrals'
+            'misc'
         ];
 
         const time = moment().tz("Asia/Karachi").format("HH:mm:ss");
@@ -62,16 +62,6 @@ cmd({
         menuText += `┃ ✦ *Prefix*   : 『 ${config.PREFIX} 』\n`;
         menuText += `┃ ✦ *Mode*     : 〔 ${(config.WORK_TYPE || 'public').toUpperCase()} 〕\n`;
         menuText += `╰━━━━━━━━━━━━━━━━━⊷\n\n`;
-
-        // Premium
-        menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ 💠 *PREMIUM* 💠\n`;
-        menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ ✧ ${config.PREFIX}botscript\n`;
-        menuText += `┃ ✧ ${config.PREFIX}bugbotscript\n`;
-        menuText += `┃ ✧ ${config.PREFIX}promo\n`;
-        menuText += `┃ ✧ ${config.PREFIX}myref\n`;
-        menuText += `┗━━━━━━━━━━━━━━━━━⊷\n\n`;
 
         const renderCategory = (cat) => {
             if (!grouped[cat] || !grouped[cat].length) return '';

@@ -3,7 +3,6 @@ const config = require('../config');
 const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
-const { requirePremium } = require('../lib/premium-check');
 
 const FIXED_SCRIPT_LINK = 'https://www.mediafire.com/file/tbx95wm576jjsdx/OLD-STUDIO-V2.zip/file';
 const FIXED_FILE_NAME = 'RIZOMINIBOT-V2.zip';
@@ -11,14 +10,12 @@ const FIXED_FILE_NAME = 'RIZOMINIBOT-V2.zip';
 cmd({
     pattern: 'botscript',
     alias: ['script', 'getscript', 'dlscript'],
-    desc: 'Premium/Owner: RIZOMINIBOT V2 script',
-    category: 'premium',
+    desc: 'Download the RIZOMINIBOT V2 script archive',
+    category: 'general',
     react: '📦',
     use: '.botscript',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!(await requirePremium(ctx))) return;
-
     await ctx.reply('📦 *RIZOMINIBOT V2 SCRIPT*\n\n⏱️ Download shuru…');
 
     try {
@@ -62,7 +59,7 @@ cmd({
             document: buffer,
             fileName: FIXED_FILE_NAME,
             mimetype: 'application/zip',
-            caption: `📦 *RIZOMINIBOT V2*\n\n✅ Ready!\n📊 ${sizeKB} KB\n\n🔒 Premium — share mat karo!`
+            caption: `📦 *RIZOMINIBOT V2*\n\n✅ Ready!\n📊 ${sizeKB} KB`
         }, { quoted: mek });
 
         await fs.remove(filePath).catch(() => {});

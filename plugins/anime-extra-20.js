@@ -1,8 +1,11 @@
 const { cmd } = require('../arslan');
 const axios = require('axios');
+const { jikanGet } = require('../lib/jikan');
 
 const JIKAN = 'https://api.jikan.moe/v4';
-const get = async (url) => (await axios.get(url, { timeout: 12000 })).data;
+const get = async (url) => url.startsWith(JIKAN)
+  ? jikanGet(url)
+  : (await axios.get(url, { timeout: 12000 })).data;
 const safe = (v, max=300) => String(v || 'N/A').replace(/[\r\n]+/g, ' ').slice(0, max);
 
 function register(pattern, alias, desc, handler) {

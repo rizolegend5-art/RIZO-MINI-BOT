@@ -6,13 +6,7 @@ const os = require('os');
 const crypto = require('crypto');
 const axios = require('axios');
 
-// 🆕 Universal premium system (owner bypass + promo + referral)
-const {
-    isOwner,
-    isPremiumUser,
-    requirePremium,
-    cleanNumber
-} = require('../lib/premium-check');
+const { isOwner } = require('../lib/access-control');
 
 function formatBytes(b) {
     if (b < 1024) return b + ' B';
