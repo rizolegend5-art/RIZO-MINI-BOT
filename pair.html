@@ -135,7 +135,6 @@ footer strong{color:var(--muted);font-weight:600}
     <div class="logo"><span><img src="https://files.catbox.moe/a622og.jpg" alt="" onerror="this.replaceWith('👑')"></span></div>
     <h1>RIZO MINl BOT V3</h1>
     <p class="sub">Link your WhatsApp with a pair code</p>
-  <p id="refNotice" class="sub" style="display:none;margin-top:12px;color:#3ddc97">🎁 You opened a RIZO referral link!</p>
   </header>
 
   <label for="number">WhatsApp number</label>
@@ -174,8 +173,6 @@ const $ = id => document.getElementById(id);
 const input = $('number'), go = $('go'), goText = $('goText');
 const result = $('result'), codeBox = $('codeBox'), copyBtn = $('copyBtn'), steps = $('steps');
 const params = new URLSearchParams(window.location.search);
-const referralCode = (params.get('ref') || '').trim().toUpperCase();
-if (referralCode && /^[A-F0-9]{6,20}$/.test(referralCode)) $('refNotice').style.display = 'block';
 let currentCode = '';
 
 const messages = {
@@ -207,7 +204,6 @@ async function getCode() {
   show('Code ban raha hai...', 'wait');
   try {
     const query = new URLSearchParams({ number: num });
-    if (referralCode && /^[A-F0-9]{6,20}$/.test(referralCode)) query.set('ref', referralCode);
     const res = await fetch('/code?' + query.toString());
     const data = await res.json();
     if (data.code) {

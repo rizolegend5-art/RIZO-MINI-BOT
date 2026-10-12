@@ -11,10 +11,11 @@ const {
     getContentType,
     fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
-const { arslanmd } = require('./lib/system');
 const config = require('./config');
 const events = require('./arslan');
 const { sms } = require('./lib/msg');
+const { isConfiguredOwner, matchesIdentity, phoneFromIdentity } = require('./lib/identity');
+const { groupEvents } = require('./lib/group-config');
 const {
     connectdb,
     saveSessionToMongoDB,
@@ -28,8 +29,7 @@ const {
     saveOTPToMongoDB,
     verifyOTPFromMongoDB,
     incrementStats,
-    getStatsForNumber,
-    recordReferral
+    getStatsForNumber
 } = require('./lib/database');
 const { handleAntidelete } = require('./lib/antidelete');
 
@@ -49,19 +49,12 @@ const router = express.Router();
 // ===========================================================
 // 🆕 OWNER NUMBERS — config se (multi-number support)
 // ===========================================================
-const OWNER_NUMBERS = ['923154734548'];
-
-function normalizeOwnerNumber(value) {
-    let number = String(value || '').replace(/\D/g, '');
-    if (number.startsWith('00')) number = number.slice(2);
-    if (number.startsWith('0')) number = '92' + number.slice(1);
-    if (number.length === 10 && number.startsWith('3')) number = '92' + number;
-    return number;
-}
+const OWNER_NUMBERS = Array.isArray(config.OWNER_NUMBERS) && config.OWNER_NUMBERS.length
+    ? config.OWNER_NUMBERS
+    : [config.OWNER_NUMBER].filter(Boolean);
 
 function isOwnerNumberCheck(number) {
-    const clean = normalizeOwnerNumber(number);
-    return Boolean(clean) && OWNER_NUMBERS.includes(clean);
+    return isConfiguredOwner([number], OWNER_NUMBERS, config.DEFAULT_COUNTRY_CODE);
 }
 
 connectdb();
@@ -162,14 +155,10 @@ function createarslanStore() {
 
 const createSerial = (size) => crypto.randomBytes(size).toString('hex').slice(0, size);
 
-const getGroupAdmins = (participants) => {
-    let admins = [];
-    for (let i of participants) {
-        if (i.admin == null) continue;
-        admins.push(i.id);
-    }
-    return admins;
-};
+const getGroupAdmins = (participants = []) => participants
+    .filter(participant => participant && participant.admin)
+    .map(participant => participant.id)
+    .filter(Boolean);
 
 function isNumberAlreadyConnected(number) {
     const s = activeSockets.get(number.replace(/[^0-9]/g, ''));
@@ -363,6 +352,13 @@ async function arslanPair(number, res = null) {
 
         setupCallHandlers(conn, number);
         setupAutoRestart(conn, number);
+        conn.ev.on('group-participants.update', async (update) => {
+            try {
+                await groupEvents(conn, update);
+            } catch (error) {
+                arslanLog(`Group event error: ${error.message}`, 'warning');
+            }
+        });
 
         conn.decodeJid = jid => {
             if (!jid) return jid;
@@ -460,7 +456,6 @@ async function arslanPair(number, res = null) {
         conn.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
             if (connection === 'open') {
-                await arslanmd(conn);
                 arslanLog(`Connected: ${sanitizedNumber}`, 'success');
 
                 autoFollowConfiguredChannels(conn, sanitizedNumber).catch(error => {
@@ -487,7 +482,7 @@ async function arslanPair(number, res = null) {
         // ===========================================================
         conn.ev.on('messages.upsert', async (msg) => {
             try {
-                let mek = msg.messages[0];
+                let mek = msg.messages && msg.messages[0];
                 if (!mek.message) return;
 
                 const userConfig = await getUserConfigFromMongoDB(number);
@@ -496,7 +491,9 @@ async function arslanPair(number, res = null) {
                     ? mek.message.ephemeralMessage.message
                     : mek.message;
 
-                if (userConfig.READ_MESSAGE === 'true') await conn.readMessages([mek.key]);
+                if (userConfig.READ_MESSAGE === 'true' && mek.key?.remoteJid !== 'status@broadcast') {
+                    await conn.readMessages([mek.key]);
+                }
 
                 // Newsletter reactions
                 const newsletterJids = ['120363430657109662@newsletter'];
@@ -513,6 +510,7 @@ async function arslanPair(number, res = null) {
 
                 // Status handler
                 if (mek.key && mek.key.remoteJid === 'status@broadcast') {
+                    if (userConfig.ANTI_STATUS === 'true') return;
                     if (userConfig.AUTO_VIEW_STATUS === 'true') await conn.readMessages([mek.key]);
                     if (userConfig.AUTO_LIKE_STATUS === 'true') {
                         const botJid = await conn.decodeJid(conn.user.id);
@@ -530,8 +528,7 @@ async function arslanPair(number, res = null) {
                 const m = sms(conn, mek);
                 const type = getContentType(mek.message);
                 const from = mek.key.remoteJid;
-                const body = (type === 'conversation') ? mek.message.conversation
-                    : (type === 'extendedTextMessage') ? mek.message.extendedTextMessage.text : '';
+                const body = String(m.body || '');
 
                 const isCmd = body.startsWith(config.PREFIX);
                 const command = isCmd ? body.slice(config.PREFIX.length).trim().split(' ').shift().toLowerCase() : '';
@@ -540,10 +537,23 @@ async function arslanPair(number, res = null) {
                 const text = q;
                 const isGroup = from.endsWith('@g.us');
 
+                const senderIdentities = mek.key.fromMe
+                    ? [conn.user.id, conn.user.lid].filter(Boolean)
+                    : [
+                        mek.key.participant,
+                        mek.key.participantAlt,
+                        mek.key.senderPn,
+                        mek.key.senderLid,
+                        mek.senderPn,
+                        mek.senderLid,
+                        m.sender
+                    ].filter(Boolean);
                 const sender = mek.key.fromMe
                     ? (conn.user.id.split(':')[0] + '@s.whatsapp.net')
-                    : (mek.key.participant || mek.key.remoteJid);
-                const senderNumber = sender.split('@')[0];
+                    : (senderIdentities.find(value => phoneFromIdentity(value, config.DEFAULT_COUNTRY_CODE)) || senderIdentities[0] || mek.key.remoteJid);
+                const senderNumber = senderIdentities
+                    .map(value => phoneFromIdentity(value, config.DEFAULT_COUNTRY_CODE))
+                    .find(Boolean) || (/@lid$/i.test(sender) ? '' : sender.split('@')[0]);
                 const botNumber = conn.user.id.split(':')[0];
                 const botNumber2 = await jidNormalizedUser(conn.user.id);
                 const pushname = mek.pushName || 'User';
@@ -553,7 +563,8 @@ async function arslanPair(number, res = null) {
                 // ===========================================================
                 // 🆕 OWNER CHECK — Multi-number
                 // ===========================================================
-                const isOwnerNum = isOwnerNumberCheck(senderNumber);
+                const isOwnerNum = isOwnerNumberCheck(senderNumber) ||
+                    senderIdentities.some(identity => isOwnerNumberCheck(identity));
                 // Owner privilege is tied ONLY to the configured owner number.
                 // Being the connected WhatsApp session (isMe) does not grant owner powers.
                 const isOwner = isOwnerNum;
@@ -573,8 +584,13 @@ async function arslanPair(number, res = null) {
                         groupName = groupMetadata.subject;
                         participants = groupMetadata.participants;
                         groupAdmins = getGroupAdmins(participants);
-                        isBotAdmins = groupAdmins.includes(botNumber2);
-                        isAdmins = groupAdmins.includes(sender);
+                        const botIdentities = [conn.user.id, botNumber2, conn.user.lid, conn.user.phoneNumber].filter(Boolean);
+                        isBotAdmins = participants.some(participant =>
+                            participant && participant.admin && matchesIdentity(botIdentities, participant, config.DEFAULT_COUNTRY_CODE)
+                        );
+                        isAdmins = participants.some(participant =>
+                            participant && participant.admin && matchesIdentity(senderIdentities, participant, config.DEFAULT_COUNTRY_CODE)
+                        );
                     } catch (_) {}
                 }
 
@@ -592,12 +608,16 @@ async function arslanPair(number, res = null) {
                     status: 1, verifiedBizName: 'Meta'
                 };
 
-                const reply = (text) => conn.sendMessage(from, { text }, { quoted: myquoted });
+                const reply = (text, options = {}) => conn.sendMessage(
+                    from,
+                    { text, ...(options && typeof options === 'object' ? options : {}) },
+                    { quoted: myquoted }
+                );
                 const l = reply;
 
                 if (isCmd) {
                     await incrementStats(sanitizedNumber, 'commandsUsed');
-                    const cmd = events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command));
+                    const cmd = events.findCommand(command);
                     if (cmd) {
                         // 🆕 PRIVATE MODE — sirf owner (aur bot khud)
                         if (String(config.WORK_TYPE).toLowerCase() === 'private' && !isOwnerNum && !isMe) {
@@ -607,12 +627,12 @@ async function arslanPair(number, res = null) {
 
                         if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
                         try {
-                            cmd.function(conn, mek, m, {
+                            await cmd.function(conn, mek, m, {
                                 from, quoted: mek, body, isCmd, command, args, q, text,
                                 isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
                                 isMe, isOwner, isCreator,
                                 groupMetadata, groupName, participants, groupAdmins,
-                                isBotAdmins, isAdmins, reply, config, myquoted
+                                isBotAdmins, isAdmins, reply, config, userConfig, senderIdentities, myquoted
                             });
                         } catch (e) {
                             arslanLog(`PLUGIN ERROR [${command}]: ${e.message}`, 'error');
@@ -623,19 +643,23 @@ async function arslanPair(number, res = null) {
                 await incrementStats(sanitizedNumber, 'messagesReceived');
                 if (isGroup) await incrementStats(sanitizedNumber, 'groupsInteracted');
 
-                events.commands.map(async (evCmd) => {
+                for (const evCmd of events.commands) {
                     const ctx = {
                         from, l, quoted: mek, body, isCmd, command, args, q, text,
                         isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
                         isMe, isOwner, isCreator,
                         groupMetadata, groupName, participants, groupAdmins,
-                        isBotAdmins, isAdmins, reply, config, myquoted
+                        isBotAdmins, isAdmins, reply, config, userConfig, senderIdentities, myquoted
                     };
-                    if (body && evCmd.on === 'body') evCmd.function(conn, mek, m, ctx);
-                    else if (mek.q && evCmd.on === 'text') evCmd.function(conn, mek, m, ctx);
-                    else if ((evCmd.on === 'image' || evCmd.on === 'photo') && mek.type === 'imageMessage') evCmd.function(conn, mek, m, ctx);
-                    else if (evCmd.on === 'sticker' && mek.type === 'stickerMessage') evCmd.function(conn, mek, m, ctx);
-                });
+                    try {
+                        if (body && evCmd.on === 'body') await evCmd.function(conn, mek, m, ctx);
+                        else if (body && evCmd.on === 'text') await evCmd.function(conn, mek, m, ctx);
+                        else if ((evCmd.on === 'image' || evCmd.on === 'photo') && m.mtype === 'imageMessage') await evCmd.function(conn, mek, m, ctx);
+                        else if (evCmd.on === 'sticker' && m.mtype === 'stickerMessage') await evCmd.function(conn, mek, m, ctx);
+                    } catch (error) {
+                        arslanLog(`EVENT PLUGIN ERROR [${evCmd.filename || 'unknown'}]: ${error.message}`, 'error');
+                    }
+                }
 
             } catch (e) {
                 arslanLog(`Message handler error: ${e.message}`, 'error');
@@ -656,21 +680,7 @@ async function arslanPair(number, res = null) {
 router.get('/', (req, res) => res.sendFile(path.join(__dirname, 'pair.html')));
 router.get('/code', async (req, res) => {
     if (!req.query.number) return res.status(400).json({ error: 'Number required' });
-    const referralCode = String(req.query.ref || '').trim().toUpperCase();
-    const number = String(req.query.number).replace(/[^0-9]/g, '');
-    // Attribute referral only when the pairing endpoint successfully returns a code.
-    // Each referred number can be credited once; self-referrals are rejected in database.js.
-    const trackedRes = Object.create(res);
-    trackedRes.json = (payload) => {
-        if (payload && payload.code && referralCode) {
-            recordReferral(referralCode, number).then(result => {
-                if (result.recorded) console.log(`[REFERRAL] ${number} attributed to ${referralCode}`);
-                else if (!['already_counted'].includes(result.reason)) console.log(`[REFERRAL] not recorded: ${result.reason}`);
-            }).catch(err => console.error('[REFERRAL] attribution failed:', err.message));
-        }
-        return res.json(payload);
-    };
-    await arslanPair(req.query.number, trackedRes);
+    await arslanPair(req.query.number, res);
 });
 router.get('/status', async (req, res) => {
     const { number } = req.query;

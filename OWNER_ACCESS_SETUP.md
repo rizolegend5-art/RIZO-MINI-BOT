@@ -6,9 +6,8 @@ The configured personal owner number is **03154734548** (international format **
 If you deploy this ZIP to Railway, set these Variables under **Service → Variables**:
 
 - `OWNER_NUMBER` = `923154734548`
-- `MONGODB_URI` = your own MongoDB connection string (required for persistent sessions/referrals)
+- `MONGODB_URI` = your own MongoDB connection string (required for persistent sessions and user settings)
 - `PREFIX` = `.` (optional)
-- `PAIR_BASE_URL` = your Railway public URL (optional; used by referral links)
 
 Do not paste your database URI or any API keys into public chats or commit them to GitHub. The ZIP intentionally does not include a database password.
 
@@ -24,7 +23,7 @@ Do not paste your database URI or any API keys into public chats or commit them 
 - `.reverse hello` — reverse text
 - `.charcount text` — character, word and line counts
 
-Existing plugins and commands were retained. The lyrics command now tries Lyrics.ovh and LRCLIB fallback search; availability still depends on the song being indexed by those providers. Song audio uses the existing multi-provider fallback and still depends on external downloader services being online.
+Existing plugins and commands were retained except the removed referral/promo/premium system and unsafe external bug-script download. Group welcome/goodbye toggles and admin detection were repaired. The lyrics command still depends on provider availability and song indexing; audio downloads still depend on their external services.
 
 ## MongoDB Atlas connection (security)
 The app already reads `MONGODB_URI` from environment variables; no password is hardcoded in this ZIP.
