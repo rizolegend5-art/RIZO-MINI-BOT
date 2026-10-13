@@ -1,22 +1,9 @@
 const fs = require('fs');
-const path = require('path');
 const dotenv = require('dotenv');
 
 if (fs.existsSync('.env')) {
     dotenv.config({ path: '.env' });
 }
-
-const defaultOwner = '923154734548';
-const configuredOwners = String(process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || defaultOwner)
-    .split(',')
-    .map(value => value.replace(/\D/g, ''))
-    .filter(Boolean);
-const runtimeSettingsFile = path.join(__dirname, 'data', 'runtime-settings.json');
-let persistedRuntimeSettings = {};
-try {
-    const saved = JSON.parse(fs.readFileSync(runtimeSettingsFile, 'utf8'));
-    if (saved && typeof saved === 'object' && !Array.isArray(saved)) persistedRuntimeSettings = saved;
-} catch (_) {}
 
 module.exports = {
     // ===========================================================
@@ -30,12 +17,13 @@ module.exports = {
     // ===========================================================
     PREFIX: process.env.PREFIX || ".",
     // Single authorized owner. The WhatsApp session number is NOT an owner unless it matches this number.
-    OWNER_NUMBER: process.env.OWNER_NUMBER || defaultOwner,
-    OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || "03154734548",
-    OWNER_NUMBERS: configuredOwners,
+    OWNER_NUMBER: process.env.OWNER_NUMBER || "",
+    OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || process.env.OWNER_NUMBER || "Not configured",
+    OWNER_NUMBERS: (process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || "").split(",").map(n => n.trim()).filter(Boolean),
 
     PAIR_BASE_URL: process.env.PAIR_BASE_URL || "https://rizo-mini-bot-production-f128.up.railway.app",
     DEFAULT_COUNTRY_CODE: process.env.DEFAULT_COUNTRY_CODE || "92",
+    PREMIUM_REFERRALS: Number(process.env.PREMIUM_REFERRALS || 4),
     FORCE_CHANNEL_1: process.env.FORCE_CHANNEL_1 || "https://whatsapp.com/channel/0029VbDTOwyJpe8nSyLzrR44",
     FORCE_CHANNEL_2: process.env.FORCE_CHANNEL_2 || "",
     BOT_NAME: "RIZO MD Mini",
@@ -107,19 +95,4 @@ AUTO_FOLLOW_DELAY: 2000,
         "😄","💀","☠️","😁","😽","😎","😽","❤️","📐","🔥","💗","😁","❤️",
         "😁","💗","😁","🤯","🥲","❤️","😌","🔥","❤️","🥲","😞","🤯","😁","😽"
     ],
-};
-
-for (const key of ['PREFIX', 'WORK_TYPE']) {
-    if (process.env[key] === undefined && typeof persistedRuntimeSettings[key] === 'string') {
-        module.exports[key] = persistedRuntimeSettings[key];
-    }
-}
-
-module.exports.persistRuntimeSetting = (key, value) => {
-    if (!['PREFIX', 'WORK_TYPE'].includes(key)) throw new Error('Unsupported runtime setting.');
-    persistedRuntimeSettings = { ...persistedRuntimeSettings, [key]: value };
-    fs.mkdirSync(path.dirname(runtimeSettingsFile), { recursive: true });
-    const temporary = `${runtimeSettingsFile}.tmp`;
-    fs.writeFileSync(temporary, JSON.stringify(persistedRuntimeSettings, null, 2));
-    fs.renameSync(temporary, runtimeSettingsFile);
 };

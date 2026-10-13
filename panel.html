@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#090b10"><title>RIZO MINI · Live Control</title>
+<style>
+:root{color-scheme:dark;--bg:#090b10;--card:#111720;--line:#253141;--text:#edf3fb;--muted:#91a0b4;--green:#4cff9b;--red:#ff637d;--cyan:#46d9ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 10% 0%,#12261f 0,transparent 40%),var(--bg);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1100px;margin:auto;padding:24px 16px 50px}.top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.brand{font-size:25px;font-weight:900;letter-spacing:1px}.brand span{color:var(--green)}.sub{color:var(--muted);font-size:13px;margin-top:4px}
+.pill{border:1px solid var(--line);border-radius:999px;padding:8px 12px;color:var(--muted);font-size:12px}.dot{display:inline-block;width:8px;height:8px;background:var(--red);border-radius:50%;margin-right:7px}.dot.live{background:var(--green);box-shadow:0 0 12px #4cff9b88}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:linear-gradient(145deg,#141c26,#0e131b);border:1px solid var(--line);border-radius:17px;padding:17px;min-width:0}.label{color:var(--muted);font-size:12px}.value{font-size:25px;font-weight:800;margin:10px 0 4px;overflow-wrap:anywhere}.hint{color:var(--muted);font-size:12px}.section{margin-top:16px}.sectionhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}h2{font-size:16px;margin:0}.btn{border:1px solid var(--line);background:#18212d;color:var(--text);padding:10px 13px;border-radius:10px;cursor:pointer}.btn:hover{border-color:var(--green)}input{width:100%;background:#090e15;border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--text);margin:8px 0}#login{max-width:430px;margin:70px auto}.session{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.session:last-child{border-bottom:0}.ok{color:var(--green)}.logs{font:12px ui-monospace,SFMono-Regular,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:380px;overflow:auto;background:#080c11;padding:13px;border-radius:12px;color:#c5d2e2}.logrow{padding:7px 0;border-bottom:1px solid #18212b}.error{color:var(--red)}.muted{color:var(--muted)}.hidden{display:none!important}.footer{margin-top:22px;color:var(--muted);font-size:12px;line-height:1.6}
+@media(max-width:750px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.value{font-size:22px}}@media(max-width:390px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body><main>
+<header class="top"><div><div class="brand"><span>RIZO</span> MINI // CONTROL</div><div class="sub">Private live monitoring · Railway deployment</div></div><div class="pill"><i id="dot" class="dot"></i><span id="connection">AUTH REQUIRED</span></div></header>
+<section id="login" class="card"><h2>🔐 Admin access</h2><p class="sub">Enter the RIZO_PANEL_TOKEN configured in Railway. It is kept only for this browser tab.</p><input id="token" type="password" autocomplete="current-password" placeholder="Panel access token"><button class="btn" id="connect">Connect dashboard</button><p id="loginError" class="hint error"></p></section>
+<section id="dashboard" class="hidden">
+<div class="grid">
+<div class="card"><div class="label">BACKEND STATUS</div><div class="value" id="status">—</div><div class="hint" id="checked">Waiting for API</div></div>
+<div class="card"><div class="label">PROCESS UPTIME</div><div class="value" id="uptime">—</div><div class="hint">Since current process started</div></div>
+<div class="card"><div class="label">CONNECTED WHATSAPP</div><div class="value" id="sessions">—</div><div class="hint">Live socket status</div></div>
+<div class="card"><div class="label">NODE RSS MEMORY</div><div class="value" id="memory">—</div><div class="hint" id="heap">Heap: —</div></div>
+</div>
+<div class="section card"><div class="sectionhead"><h2>🛰 Runtime & system</h2><button class="btn" id="refresh">Refresh now</button></div><div class="grid">
+<div><div class="label">Node.js</div><div class="value" style="font-size:17px" id="node">—</div></div>
+<div><div class="label">Platform / cores</div><div class="value" style="font-size:17px" id="platform">—</div></div>
+<div><div class="label">Host memory (OS)</div><div class="value" style="font-size:17px" id="hostmem">—</div></div>
+<div><div class="label">Load average</div><div class="value" style="font-size:17px" id="load">—</div></div>
+</div><p class="hint">Host memory/load may describe the container host, not Railway's exact service allocation. Use Railway metrics for authoritative container resource usage.</p></div>
+<div class="section card"><div class="sectionhead"><h2>📱 Active sessions</h2><span class="hint">Numbers masked for privacy</span></div><div id="sessionList" class="muted">No data yet</div></div>
+<div class="section card"><div class="sectionhead"><h2>📜 Recent application logs</h2><button class="btn" id="logout">Lock dashboard</button></div><div class="hint" style="margin-bottom:10px">Latest in-memory RIZO application events. This buffer resets when the process restarts.</div><div id="logs" class="logs">Loading…</div></div>
+</section>
+<div class="footer">RIZO MINI BOT · Live data is fetched from this deployment. If the service is down, the dashboard will show offline rather than inventing status.</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);let token='',timer=null;
+function duration(sec){sec=Math.max(0,Math.floor(sec||0));const d=Math.floor(sec/86400);sec%=86400;const h=Math.floor(sec/3600);sec%=3600;const m=Math.floor(sec/60);sec%=60;return (d?d+'d ':'')+(h+'h '+m+'m '+sec+'s')}
+async function api(path){const r=await fetch(path,{headers:{'x-panel-token':token},cache:'no-store'});const data=await r.json().catch(()=>({error:'Invalid response'}));if(!r.ok)throw new Error(data.error||'Request failed');return data}
+async function update(){try{const [m,l]=await Promise.all([api('/api/panel/metrics'),api('/api/panel/logs?limit=80')]);$('login').classList.add('hidden');$('dashboard').classList.remove('hidden');$('dot').classList.add('live');$('connection').textContent='LIVE · '+new Date(m.timestamp).toLocaleTimeString();$('status').textContent='ONLINE';$('status').className='value ok';$('checked').textContent='API confirmed · '+new Date(m.timestamp).toLocaleString();$('uptime').textContent=duration(m.processUptimeSeconds);$('sessions').textContent=m.sessions.connected;$('memory').textContent=m.memory.rssMB+' MB';$('heap').textContent='Heap '+m.memory.heapUsedMB+' / '+m.memory.heapTotalMB+' MB';$('node').textContent=m.system.nodeVersion;$('platform').textContent=m.system.platform+' / '+m.system.cpuCores+' cores';$('hostmem').textContent=m.system.hostFreeMemoryMB+' / '+m.system.hostTotalMemoryMB+' MB free';$('load').textContent=(m.system.loadAverage||[]).map(n=>Number(n).toFixed(2)).join(' / ');$('sessionList').innerHTML=m.sessions.items.length?m.sessions.items.map(s=>'<div class="session"><span>'+escapeHtml(s.number)+'</span><span class="ok">● Connected · '+escapeHtml(duration(s.uptimeSeconds))+'</span></div>').join(''):'<div class="session muted">No connected WhatsApp sessions right now.</div>';$('logs').innerHTML=l.logs.length?l.logs.map(x=>'<div class="logrow"><span class="muted">'+escapeHtml(new Date(x.time).toLocaleTimeString())+'</span> <b class="'+(x.level==='error'?'error':x.level==='success'?'ok':'')+'">['+escapeHtml(x.level)+']</b> '+escapeHtml(x.message)+'</div>').join(''):'No application logs captured yet.';$('loginError').textContent='';}catch(e){$('dot').classList.remove('live');$('connection').textContent='OFFLINE / AUTH ERROR';if(e.message==='Unauthorized'){$('dashboard').classList.add('hidden');$('login').classList.remove('hidden');$('loginError').textContent='Token rejected. Check RIZO_PANEL_TOKEN.';}else if($('dashboard').classList.contains('hidden')){$('loginError').textContent=e.message;}else{$('status').textContent='UNAVAILABLE';$('status').className='value error';$('checked').textContent=e.message;}}}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function start(){if(timer)clearInterval(timer);update();timer=setInterval(update,5000)}
+$('connect').onclick=()=>{token=$('token').value.trim();if(!token){$('loginError').textContent='Enter your panel token.';return}start()};
+$('token').addEventListener('keydown',e=>{if(e.key==='Enter')$('connect').click()});
+$('refresh').onclick=update;$('logout').onclick=()=>{if(timer)clearInterval(timer);timer=null;token='';$('token').value='';$('dashboard').classList.add('hidden');$('login').classList.remove('hidden');$('dot').classList.remove('live');$('connection').textContent='AUTH REQUIRED'};
+</script></body></html>

@@ -113,3 +113,48 @@ $ cp config.example.js config.js
 
 # 4. Start the bot
 $ npm start
+
+
+## 🔴 RIZO Live Control Panel
+
+A private live monitoring dashboard is available at `/panel` on the same Railway domain as the pairing page.
+
+### Enable it on Railway
+1. Open the existing Railway service → **Variables**.
+2. Add `RIZO_PANEL_TOKEN` with a long, random secret value (at least 32 random characters). Do not put the real value in GitHub or `.env.example`.
+3. Redeploy the service.
+4. Open `https://YOUR-RAILWAY-DOMAIN/panel` and enter the same token.
+
+### Included live data
+- Backend liveness check (`/api/health`)
+- Protected process metrics (`/api/panel/metrics`): process uptime, Node memory, runtime version, active Baileys sessions
+- Protected recent application log buffer (`/api/panel/logs`)
+- Auto-refresh every five seconds; connected WhatsApp numbers are masked in the UI
+
+### Important limitations
+- The log buffer is in memory and resets on restart; use persistent log storage for history.
+- Node process RSS/heap are process metrics. OS memory and load averages may describe the host/container environment and are not a substitute for Railway's service-level metrics.
+- The dashboard does not expose controls to disconnect sessions or execute commands.
+- Keep `RIZO_PANEL_TOKEN` private. This is an additional monitoring feature; it does not replace Railway access controls or a full admin authentication system.
+
+
+## RIZO fixes: owner, group permissions, song and anime APIs
+
+Set these in Railway → Variables (do not commit real keys):
+
+- `OWNER_NUMBER`: the actual owner WhatsApp number in international digits, e.g. `923XXXXXXXXX` (no `+`).
+- `OWNER_NUMBERS`: optional comma-separated extra owner numbers.
+- `ALYACHAN_API_KEY`: optional key for the AlyaChan YouTube MP3 fallback.
+
+The bot reads owner settings at startup, so redeploy/restart after changing them. Song download tries multiple providers in sequence; public API availability can change, so no third-party provider can be guaranteed 24/7. `.lyrics` now returns lookup links and song metadata instead of reposting full copyrighted lyrics. Anime image search tries Jikan character search, Jikan series posters, then a SFW random-image fallback. Group admin checks now compare normalized Baileys JIDs and alternate phone/LID identifiers where available.
+
+
+## Command reliability and owner setup
+
+- Configure Railway Variables: `OWNER_NUMBER=923XXXXXXXXX` (digits only, your actual owner number). Optional: `OWNER_NUMBERS=923XXXXXXXXX,923YYYYYYYYY` for multiple owners.
+- Redeploy after changing variables because the owner list is read at startup.
+- Run `npm run check:all` to syntax-check JavaScript files.
+- See `COMMAND_AUDIT.md` for duplicate command names and the current command inventory. Duplicate handlers remain accessible under a generated filename-suffixed command while the latest handler keeps the normal command name.
+- Commands that modify group settings still require WhatsApp group-admin permissions, and some actions require the bot itself to be a group admin.
+- Adult-content plugin is not loaded.
+- Syntax checks do not prove third-party APIs or a live WhatsApp session are online.
