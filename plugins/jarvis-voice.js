@@ -1,26 +1,31 @@
+// ============================================
+// RIZO HELL-MD | FIXED WHATSAPP TTS
+// Railway / Render
+// ============================================
+
 const { cmd } = require('../arslan');
-const config = require('../config');
 const fs = require('fs-extra');
 const path = require('path');
-const { exec } = require('child_process');
+const os = require('os');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
-const execAsync = promisify(exec);
 
-// ===========================================================
-// 🎙️ Edge-TTS setup
-// ===========================================================
+const execFileAsync = promisify(execFile);
+
+// Prefer the npm-bundled FFmpeg binary on Railway; do not depend on system ffmpeg/python3.
+let FFMPEG_BIN = 'ffmpeg';
+try { FFMPEG_BIN = require('@ffmpeg-installer/ffmpeg').path || 'ffmpeg'; } catch (_) {}
+
 let EdgeTTS = null;
+
 try {
-    const edgeTts = require('edge-tts-universal');
-    EdgeTTS = edgeTts.UniversalEdgeTTS || edgeTts.EdgeTTS;
-    console.log('✅ Edge-TTS loaded');
-} catch (e) {
-    console.log('⚠️ edge-tts-universal not installed');
+    const edge = require('edge-tts-universal');
+    EdgeTTS = edge.UniversalEdgeTTS || edge.EdgeTTS;
+    console.log('[RIZO TTS] Edge-TTS loaded');
+} catch (error) {
+    console.error('[RIZO TTS] Module missing:', error.message);
 }
 
-// ===========================================================
-// 🎤 VOICES
-// ===========================================================
 const VOICES = {
     jarvis: 'ur-PK-AsadNeural',
     raju: 'ur-PK-AsadNeural',
@@ -35,113 +40,127 @@ const VOICES = {
     'hindi-f': 'hi-IN-SwaraNeural'
 };
 
-// ===========================================================
-// 🎯 MP3 → OGG/Opus conversion (WhatsApp voice note compatible)
-// ===========================================================
-async function convertToOpus(mp3Path, oggPath) {
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// ============================================
+// GENERATE VALID OGG / OPUS VOICE NOTE
+// ============================================
+
+async function createVoice(text, voice) {
+    if (!EdgeTTS) {
+        throw new Error('EDGE_TTS_MISSING');
+    }
+
+    const workDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'rizo-tts-')
+    );
+
+    const mp3Path = path.join(workDir, 'input.mp3');
+    const oggPath = path.join(workDir, 'voice.ogg');
+
     try {
-        // WhatsApp voice notes ke liye optimized ffmpeg command
-        await execAsync(
-            `ffmpeg -i "${mp3Path}" -c:a libopus -b:a 32k -ar 48000 -ac 1 -application voip -vbr on -compression_level 10 -frame_duration 60 -y "${oggPath}"`,
-            { timeout: 30000 }
+        const tts = new EdgeTTS(text, voice);
+        const result = await tts.synthesize();
+
+        if (!result?.audio?.arrayBuffer) {
+            throw new Error('TTS returned no audio');
+        }
+
+        const audioBuffer = Buffer.from(
+            await result.audio.arrayBuffer()
         );
-        return fs.existsSync(oggPath);
-    } catch (e) {
-        console.error('ffmpeg conversion error:', e.message);
-        return false;
+
+        if (audioBuffer.length < 1000) {
+            throw new Error('Generated audio is empty');
+        }
+
+        await fs.writeFile(mp3Path, audioBuffer);
+
+        // -y must be before the output file.
+        // Force real OGG container with Opus codec.
+        await execFileAsync(FFMPEG_BIN, [
+            '-hide_banner',
+            '-loglevel', 'error',
+            '-y',
+            '-i', mp3Path,
+            '-vn',
+            '-map_metadata', '-1',
+            '-c:a', 'libopus',
+            '-application', 'voip',
+            '-b:a', '32k',
+            '-vbr', 'on',
+            '-ac', '1',
+            '-ar', '48000',
+            '-f', 'ogg',
+            oggPath
+        ], {
+            timeout: 60000,
+            maxBuffer: 2 * 1024 * 1024
+        });
+
+        const oggBuffer = await fs.readFile(oggPath);
+
+        // OGG files start with the OggS signature.
+        if (
+            oggBuffer.length < 1000 ||
+            oggBuffer.toString('ascii', 0, 4) !== 'OggS'
+        ) {
+            throw new Error('OGG/Opus conversion validation failed');
+        }
+
+        return oggBuffer;
+
+    } catch (error) {
+        console.error('[RIZO TTS ERROR]', error.message);
+        throw error;
+    } finally {
+        await fs.remove(workDir).catch(() => {});
     }
 }
 
-// ===========================================================
-// 🎯 TTS generate + convert + send (full pipeline)
-// ===========================================================
-async function generateVoice(conn, ctx, text, voice) {
-    const tmpDir = path.join(__dirname, '..', 'tmp');
-    fs.ensureDirSync(tmpDir);
+// ============================================
+// SEND VOICE NOTE
+// ============================================
 
-    const timestamp = Date.now();
-    const mp3File = path.join(tmpDir, `tts_${timestamp}.mp3`);
-    const oggFile = path.join(tmpDir, `tts_${timestamp}.ogg`);
+async function sendVoice(conn, mek, ctx, text, voice) {
+    const audio = await createVoice(text, voice);
 
-    // Step 1: Edge-TTS se MP3 banao
-    const tts = new EdgeTTS(text, voice);
-    const result = await tts.synthesize();
-    const audioBuffer = Buffer.from(await result.audio.arrayBuffer());
-
-    // Check karo audio valid hai
-    if (!audioBuffer || audioBuffer.length < 1000) {
-        throw new Error('Edge-TTS ne empty audio diya');
-    }
-
-    await fs.writeFile(mp3File, audioBuffer);
-
-    // Step 2: MP3 → OGG/Opus convert karo
-    const converted = await convertToOpus(mp3File, oggFile);
-
-    // Step 3: Send karo
-    if (converted) {
-        await conn.sendMessage(ctx.from, {
-            audio: { url: oggFile },
-            mimetype: 'audio/ogg; codecs=opus',
-            ptt: true
-        }, { quoted: ctx.mek });
-    } else {
-        // Fallback: MP3 bhejo (kuch devices pe chalta hai)
-        console.warn('⚠️ ffmpeg conversion fail, MP3 bhej raha hun');
-        await conn.sendMessage(ctx.from, {
-            audio: { url: mp3File },
-            mimetype: 'audio/mpeg',
-            ptt: true
-        }, { quoted: ctx.mek });
-    }
-
-    // Cleanup
-    fs.remove(mp3File).catch(() => {});
-    fs.remove(oggFile).catch(() => {});
+    // Send actual audio bytes, not a temporary file URL.
+    await conn.sendMessage(ctx.from, {
+        audio: audio,
+        mimetype: 'audio/ogg; codecs=opus',
+        ptt: true
+    }, { quoted: mek });
 }
 
-// ===========================================================
-// 1. TTS — Text to voice
-// ===========================================================
-cmd({
-    pattern: 'tts',
-    alias: ['voice', 'say', 'speak', 'bolo'],
-    desc: 'Text ko voice me convert karo (Jarvis/Raju style)',
-    category: 'tools',
-    react: '🎙️',
-    use: '.tts <text>  |  .tts jarvis <text>',
-    filename: __filename
-}, async (conn, mek, m, ctx) => {
+// ============================================
+// COMMON COMMAND HANDLER
+// ============================================
+
+async function handleTTS(conn, mek, ctx, input, defaultVoice) {
     if (!EdgeTTS) {
         return ctx.reply(
-            '❌ *TTS setup missing*\n\n' +
-            'Install karo:\n```\nnpm install edge-tts-universal\n```'
+            '❌ Edge-TTS missing. Install edge-tts-universal.'
         );
     }
 
-    const input = (ctx.q || '').trim();
+    input = (input || '').trim();
+
     if (!input) {
-        return ctx.reply([
-            '🎙️ *TEXT TO VOICE*',
-            '',
-            '*Use:* `.tts <text>`',
-            '',
-            '*Voices:*',
-            '• `jarvis` — Male Urdu 🎙️',
-            '• `raju` — Male Urdu 🎙️',
-            '• `uzma` — Female Urdu 🎙️',
-            '• `hindi` — Hindi Male',
-            '• `english-m` — English Male',
-            '',
-            '*Example:*',
-            '`.tts jarvis salam bhai`'
-        ].join('\n'));
+        return ctx.reply(
+            '🎙️ *RIZO HELL-MD TTS*\n\n' +
+            'Use: .tts hello bhai\n' +
+            'Use: .tts jarvis salam bhai\n' +
+            'Use: .tts english-m Hello boss\n' +
+            'Use: .jarvis Hello boss\n' +
+            'Use: .raju Kya haal hai'
+        );
     }
 
     const parts = input.split(/\s+/);
     const firstWord = parts[0].toLowerCase();
 
-    let voice = 'ur-PK-AsadNeural';
+    let voice = defaultVoice || VOICES.jarvis;
     let text = input;
 
     if (VOICES[firstWord]) {
@@ -149,73 +168,126 @@ cmd({
         text = parts.slice(1).join(' ');
     }
 
-    if (!text || text.length < 2) return ctx.reply('❌ Text do voice ke liye.');
-    if (text.length > 500) return ctx.reply('❌ Max 500 characters.');
+    text = text.trim();
 
-    await conn.sendMessage(ctx.from, { react: { text: '⏳', key: mek.key } });
+    if (text.length < 2) {
+        return ctx.reply('❌ Voice generate karne ke liye text do.');
+    }
+
+    if (text.length > 500) {
+        return ctx.reply('❌ Maximum 500 characters allowed hain.');
+    }
+
+    await conn.sendMessage(ctx.from, {
+        react: { text: '⏳', key: mek.key }
+    });
 
     try {
-        // Ye ek hi line se generate + convert + send ho jayega
-        await generateVoice(conn, { from: ctx.from, mek }, text, voice);
-        await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
+        await sendVoice(conn, mek, ctx, text, voice);
 
-    } catch (e) {
-        console.error('tts error:', e.message);
-        await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
-        return ctx.reply('❌ Voice generate fail: ' + e.message);
+        await conn.sendMessage(ctx.from, {
+            react: { text: '✅', key: mek.key }
+        });
+
+    } catch (error) {
+        console.error('[RIZO TTS]', error);
+
+        await conn.sendMessage(ctx.from, {
+            react: { text: '❌', key: mek.key }
+        });
+
+        if (error.message === 'EDGE_TTS_MISSING') {
+            return ctx.reply(
+                '❌ TTS package missing hai. Railway par npm install/redeploy karo.'
+            );
+        }
+
+        if (error.code === 'ENOENT') {
+            return ctx.reply('❌ Audio converter nahi mila. Railway par dependencies reinstall karke redeploy karo.');
+        }
+        return ctx.reply(
+            '❌ Voice generate nahi hui.\n' +
+            'Railway deployment logs mein [RIZO TTS ERROR] check karo.'
+        );
     }
+}
+
+// ============================================
+// .TTS
+// ============================================
+
+cmd({
+    pattern: 'tts',
+    alias: ['voice', 'say', 'speak', 'bolo'],
+    desc: 'Text to voice',
+    category: 'tools',
+    react: '🎙️',
+    use: '.tts <text>',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    return handleTTS(
+        conn, mek, ctx, ctx.q, VOICES.jarvis
+    );
 });
 
-// ===========================================================
-// 2. JARVIS — Jarvis style voice
-// ===========================================================
+// ============================================
+// .JARVIS
+// ============================================
+
 cmd({
     pattern: 'jarvis',
     alias: ['jarvisvoice'],
-    desc: 'Jarvis style voice',
+    desc: 'Jarvis voice',
     category: 'fun',
     react: '🤖',
     use: '.jarvis <text>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!EdgeTTS) return ctx.reply('❌ Install: `npm install edge-tts-universal`');
-    if (!ctx.q) return ctx.reply('Use: `.jarvis hello boss`');
-
-    await conn.sendMessage(ctx.from, { react: { text: '🤖', key: mek.key } });
-
-    try {
-        await generateVoice(conn, { from: ctx.from, mek }, ctx.q.slice(0, 500), 'ur-PK-AsadNeural');
-        await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
-    } catch (e) {
-        console.error('jarvis error:', e.message);
-        await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
-        return ctx.reply('❌ Voice fail: ' + e.message);
-    }
+    return handleTTS(
+        conn, mek, ctx, ctx.q, VOICES.jarvis
+    );
 });
 
-// ===========================================================
-// 3. RAJU — Raju style voice
-// ===========================================================
+// ============================================
+// .RAJU
+// ============================================
+
 cmd({
     pattern: 'raju',
     alias: ['rajuvoice'],
-    desc: 'Raju style voice',
+    desc: 'Raju voice',
     category: 'fun',
     react: '🎤',
     use: '.raju <text>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!EdgeTTS) return ctx.reply('❌ Install: `npm install edge-tts-universal`');
-    if (!ctx.q) return ctx.reply('Use: `.raju kya haal hai`');
-
-    await conn.sendMessage(ctx.from, { react: { text: '🎤', key: mek.key } });
-
-    try {
-        await generateVoice(conn, { from: ctx.from, mek }, ctx.q.slice(0, 500), 'ur-PK-AsadNeural');
-        await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
-    } catch (e) {
-        console.error('raju error:', e.message);
-        await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
-        return ctx.reply('❌ Voice fail: ' + e.message);
-    }
+    return handleTTS(
+        conn, mek, ctx, ctx.q, VOICES.raju
+    );
 });
+
+// ============================================
+// .VOICES
+// ============================================
+
+cmd({
+    pattern: 'voices',
+    alias: ['voicelist', 'ttsvoices'],
+    desc: 'List available TTS voices',
+    category: 'tools',
+    react: '🎙️',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    return ctx.reply(
+        '🎙️ *RIZO HELL-MD VOICES*\n\n' +
+        '🇵🇰 Urdu male: `jarvis`, `raju`, `male`\n' +
+        '🇵🇰 Urdu female: `uzma`, `female`\n' +
+        '🇮🇳 Hindi male: `hindi`\n' +
+        '🇮🇳 Hindi female: `hindi-f`\n' +
+        '🇺🇸 English male: `english-m`\n' +
+        '🇺🇸 English female: `english-f`\n\n' +
+        'Example: `.tts jarvis Hello boss`'
+    );
+});
+
+console.log('[RIZO HELL-MD] TTS commands registered');

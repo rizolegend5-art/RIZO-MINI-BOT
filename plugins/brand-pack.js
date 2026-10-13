@@ -3,7 +3,8 @@ const config = require('../config');
 const fs = require('fs-extra');
 const path = require('path');
 
-const { isOwner } = require('../lib/access-control');
+// ✅ Sirf import — baaki sab premium-check.js me hai
+const { requirePremium, isOwner, isPremiumUser } = require('../lib/premium-check');
 
 // ===========================================================
 // 1. SETPP — Bot ki display pic change
@@ -11,13 +12,14 @@ const { isOwner } = require('../lib/access-control');
 cmd({
     pattern: 'setpp',
     alias: ['setdp', 'botpic', 'setprofile', 'setbotpp'],
-    desc: 'Owner: Bot ki profile pic change karo',
-    category: 'owner',
+    desc: 'Premium/Owner: Bot ki profile pic change karo',
+    category: 'premium',
     react: '🖼️',
     use: '.setpp (image reply karke)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot profile badal sakta hai.');
+    // ✅ Premium check (owner auto bypass)
+    if (!(await requirePremium(ctx))) return;
 
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const imgMsg = quoted?.imageMessage || mek.message?.imageMessage;
@@ -49,12 +51,12 @@ cmd({
 cmd({
     pattern: 'removepp',
     alias: ['delpp', 'cleardp', 'removebotpp'],
-    desc: 'Owner: Bot ki profile pic hatao',
-    category: 'owner',
+    desc: 'Premium/Owner: Bot ki profile pic hatao',
+    category: 'premium',
     react: '🗑️',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot profile badal sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     try {
         await conn.removeProfilePicture(conn.user.id);
@@ -70,13 +72,13 @@ cmd({
 cmd({
     pattern: 'setbotname',
     alias: ['botname', 'setwa', 'renamebot'],
-    desc: 'Owner: Bot ka WhatsApp naam change karo',
-    category: 'owner',
+    desc: 'Premium/Owner: Bot ka WhatsApp naam change karo',
+    category: 'premium',
     react: '✏️',
     use: '.setbotname RIZO-MD V2',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot profile badal sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const name = (ctx.q || '').trim();
     if (!name || name.length > 25) {
@@ -97,13 +99,13 @@ cmd({
 cmd({
     pattern: 'setstatus',
     alias: ['botstatus', 'setabout'],
-    desc: 'Owner: Bot ka about/status change karo',
-    category: 'owner',
+    desc: 'Premium/Owner: Bot ka about/status change karo',
+    category: 'premium',
     react: '💬',
     use: '.setstatus Available 24/7',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot profile badal sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const text = (ctx.q || '').trim();
     if (!text || text.length > 139) {
@@ -162,13 +164,13 @@ cmd({
 cmd({
     pattern: 'setall',
     alias: ['setbotall', 'botbrand'],
-    desc: 'Owner: DP + Name + Status ek saath',
-    category: 'owner',
+    desc: 'Premium/Owner: DP + Name + Status ek saath',
+    category: 'premium',
     react: '⚡',
     use: '.setall Name | Status | (image reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot profile badal sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const parts = (ctx.q || '').split('|').map(x => x.trim());
     const name = parts[0] || '';

@@ -4,7 +4,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { isOwner, cleanNumber } = require('../lib/access-control');
+const { isOwner, cleanNumber } = require('../lib/premium-check');
 
 // ===========================================================
 // 1. OWNERHUB — Full bot dashboard

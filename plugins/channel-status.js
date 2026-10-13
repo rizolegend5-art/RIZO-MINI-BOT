@@ -1,7 +1,13 @@
 const { cmd } = require('../arslan');
 const config = require('../config');
 
-const { isOwner, cleanNumber } = require('../lib/access-control');
+// 🆕 Universal premium system (owner bypass + promo + referral)
+const {
+    requirePremium,
+    isOwner,
+    isPremiumUser,
+    cleanNumber
+} = require('../lib/premium-check');
 
 // ===========================================================
 // 1. CHANNELSTATUS — Channel pe text/image status
@@ -9,13 +15,14 @@ const { isOwner, cleanNumber } = require('../lib/access-control');
 cmd({
     pattern: 'channelstatus',
     alias: ['chstatus', 'chstat', 'statusupdate'],
-    desc: 'Owner: Channel pe temporary status post karo',
-    category: 'owner',
+    desc: 'Premium/Owner: Channel pe 24hr temporary status post karo',
+    category: 'premium',
     react: '📢',
     use: '.channelstatus <channel_jid> <text>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot account se channel status post kar sakta hai.');
+    // ✅ Universal premium check (owner bypass auto)
+    if (!(await requirePremium(ctx))) return;
 
     const parts = (ctx.q || '').split(' ');
     const channelJid = parts.shift();
@@ -60,13 +67,13 @@ cmd({
 cmd({
     pattern: 'chstatimg',
     alias: ['chstatusimg', 'chstatpic'],
-    desc: 'Owner: Channel pe image status post karo',
-    category: 'owner',
+    desc: 'Premium/Owner: Channel pe image status post karo',
+    category: 'premium',
     react: '🖼️',
     use: '.chstatimg <channel_jid> (image reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot account se channel status post kar sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const imgMsg = quoted?.imageMessage || mek.message?.imageMessage;
@@ -96,13 +103,13 @@ cmd({
 cmd({
     pattern: 'chstatvid',
     alias: ['chstatusvideo', 'chstatvideo'],
-    desc: 'Owner: Channel pe video status post karo',
-    category: 'owner',
+    desc: 'Premium/Owner: Channel pe video status post karo',
+    category: 'premium',
     react: '🎥',
     use: '.chstatvid <channel_jid> (video reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot account se channel status post kar sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const vidMsg = quoted?.videoMessage || mek.message?.videoMessage;
@@ -132,13 +139,13 @@ cmd({
 cmd({
     pattern: 'chstatsticker',
     alias: ['stickerstatus', 'chstatstk'],
-    desc: 'Owner: Sticker channel pe post karo',
-    category: 'owner',
+    desc: 'Premium/Owner: Sticker channel pe post karo',
+    category: 'premium',
     react: '🎨',
     use: '.chstatsticker <channel_jid> (image reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot account se channel status post kar sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const imgMsg = quoted?.imageMessage || mek.message?.imageMessage;
@@ -174,13 +181,13 @@ cmd({
 cmd({
     pattern: 'chstatremind',
     alias: ['statusremind'],
-    desc: 'Owner: Status expiry reminder set karo',
-    category: 'owner',
+    desc: 'Premium/Owner: Status expiry reminder set karo',
+    category: 'premium',
     react: '⏰',
     use: '.chstatremind <channel_jid> <hours>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot account se channel status post kar sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const args = ctx.args || [];
     const channelJid = args[0];
@@ -211,13 +218,13 @@ cmd({
 cmd({
     pattern: 'chstatforward',
     alias: ['chforward'],
-    desc: 'Owner: Channel post ko group me forward',
-    category: 'owner',
+    desc: 'Premium/Owner: Channel post ko group me forward',
+    category: 'premium',
     react: '↗️',
     use: '.chstatforward <group_jid> (channel post pe reply)',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot account se channel status post kar sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const groupJid = (ctx.args[0] || '').trim();
     if (!groupJid) return ctx.reply('Use: `.chstatforward <group_jid>`');
@@ -244,13 +251,13 @@ cmd({
 cmd({
     pattern: 'chstatreact',
     alias: ['chreactstatus'],
-    desc: 'Owner: Channel status pe custom reaction',
-    category: 'owner',
+    desc: 'Premium/Owner: Channel status pe custom reaction',
+    category: 'premium',
     react: '💫',
     use: '.chstatreact <channel_jid> <serverId> <emoji>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot account se channel status post kar sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const args = ctx.args || [];
     const channelJid = args[0];
@@ -276,13 +283,13 @@ cmd({
 cmd({
     pattern: 'chstatbulk',
     alias: ['bulkstatus'],
-    desc: 'Owner: Ek hi text multiple channels pe',
-    category: 'owner',
+    desc: 'Premium/Owner: Ek hi text multiple channels pe',
+    category: 'premium',
     react: '📣',
     use: '.chstatbulk <jid1,jid2,jid3> <text>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isOwner(ctx)) return ctx.reply('⛔ Sirf configured owner bot account se channel status post kar sakta hai.');
+    if (!(await requirePremium(ctx))) return;
 
     const parts = (ctx.q || '').split(' ');
     const jids = (parts.shift() || '').split(',').map(j => j.trim()).filter(Boolean);
