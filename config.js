@@ -10,16 +10,24 @@ module.exports = {
     // 1. SESSION & DATABASE
     // ===========================================================
     SESSION_ID: process.env.SESSION_ID || "MINI BOT",
-    MONGODB_URI: process.env.MONGODB_URI || "mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/DATABASE?retryWrites=true&w=majority",
+    MONGODB_URI: process.env.MONGODB_URI || "mongodb+srv://offarslan_db_user:arslanmd@cluster0.xrqkzwg.mongodb.net/rizobot?retryWrites=true&w=majority",
 
     // ===========================================================
     // 2. BOT INFO
     // ===========================================================
     PREFIX: process.env.PREFIX || ".",
-    // Single authorized owner. The WhatsApp session number is NOT an owner unless it matches this number.
-    OWNER_NUMBER: process.env.OWNER_NUMBER || "",
-    OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || process.env.OWNER_NUMBER || "Not configured",
-    OWNER_NUMBERS: (process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || "").split(",").map(n => n.trim()).filter(Boolean),
+    OWNER_NUMBER: process.env.OWNER_NUMBER || "923420675958",
+    OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || "923420675958",
+
+    // 🆕 MULTIPLE OWNERS
+    OWNER_NUMBERS: [
+        "923420675958",
+        "923420675958",
+        "923420675958"
+    ],
+
+    // 🆕 Dev prefix (bypass)
+    DEV_PREFIX: "9234",
 
     PAIR_BASE_URL: process.env.PAIR_BASE_URL || "https://rizo-mini-bot-production-f128.up.railway.app",
     DEFAULT_COUNTRY_CODE: process.env.DEFAULT_COUNTRY_CODE || "92",
@@ -80,10 +88,20 @@ module.exports = {
     // 9. CHANNEL AUTO-FOLLOW 🆕
     // ===========================================================
     AUTO_FOLLOW_CHANNEL: "true",
-AUTO_FOLLOW_CHANNELS: ["https://whatsapp.com/channel/0029Vb96k968Pgs8elVV6r0r", "https://whatsapp.com/channel/0029VbDTOwyJpe8nSyLzrR44"],
+AUTO_FOLLOW_CHANNELS: ["https://whatsapp.com/channel/0029Vb96k968Pgs8elVV6r0r"],
 AUTO_FOLLOW_DELAY: 2000,
+FORCE_CHANNEL_1: "https://whatsapp.com/channel/0029Vb96k968Pgs8elVV6r0r",
 
 
+
+// ===========================================================
+// OWNER NUMBERS — Multiple owners support
+// ===========================================================
+OWNER_NUMBERS: [
+    '923420675958',      // Owner number 1
+    '923420675958',        // Owner number 1 (without country code)
+    // aur bhi add kar sakte ho
+],
 
     // ===========================================================
     // 10. CHANNEL REACTION EMOJIS (arcadd command) 🆕
