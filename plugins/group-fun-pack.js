@@ -579,5 +579,15 @@ cmd({
     }, { quoted: mek });
 });
 
-// NOTE: The following command in the supplied ZIP was truncated and has been omitted
-// so this plugin can load safely. Restore it from a complete source before re-adding.
+// 29. TICTACTOE — Simple tic tac toe
+const games = new Map();
+cmd({
+    pattern: 'tictactoe',
+    alias: ['ttt'],
+    desc: 'Tic tac toe game start karo',
+    category: 'fun',
+    react: '🎮',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    const mentioned = mek.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+    if (!mentioned[0]) ret

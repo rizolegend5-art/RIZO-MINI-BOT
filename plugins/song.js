@@ -26,34 +26,42 @@ async function getAudioUrl(youtubeUrl) {
 
     const apis = [
         {
-            name: 'EliteProTech',
-            url: `https://eliteprotech-apis.zone.id/ytdown?url=${encodedUrl}&format=mp3`,
-            parse: d => d?.downloadURL ? { download: d.downloadURL, title: d.title } : null
-        },
-        {
-            name: 'Vreden',
-            url: `https://api.vreden.my.id/api/ytmp3?url=${encodedUrl}`,
-            parse: d => d?.result?.download?.url ? { download: d.result.download.url, title: d.result.metadata?.title } : null
+            name: 'Okatsu',
+            url: `https://okatsu-rolezapiiz.vercel.app/downloader/ytmp3?url=${encodedUrl}`,
+            parse: d => d?.dl
+                ? { download: d.dl, title: d.title }
+                : null
         },
         {
             name: 'Yupra',
             url: `https://api.yupra.my.id/api/downloader/ytmp3?url=${encodedUrl}`,
-            parse: d => d?.data?.download_url ? { download: d.data.download_url, title: d.data.title } : null
+            parse: d => d?.success && d?.data?.download_url
+                ? {
+                    download: d.data.download_url,
+                    title: d.data.title
+                }
+                : null
         },
         {
-            name: 'Okatsu',
-            url: `https://okatsu-rolezapiiz.vercel.app/downloader/ytmp3?url=${encodedUrl}`,
-            parse: d => d?.dl ? { download: d.dl, title: d.title } : null
+            name: 'EliteProTech',
+            url: `https://eliteprotech-apis.zone.id/ytdown?url=${encodedUrl}&format=mp3`,
+            parse: d => d?.success && d?.downloadURL
+                ? {
+                    download: d.downloadURL,
+                    title: d.title
+                }
+                : null
         },
-        // Optional provider: store its key in Railway Variables, never in source code.
-        ...(process.env.ALYACHAN_API_KEY ? [{
-            name: 'AlyaChan',
-            url: `https://api.alyachan.pro/api/ytmp3?url=${encodedUrl}&apikey=${encodeURIComponent(process.env.ALYACHAN_API_KEY)}`,
-            parse: d => {
-                const url = d?.result?.url || d?.result?.downloadUrl || d?.data?.url || d?.url;
-                return url ? { download: url, title: d?.result?.title || d?.data?.title || d?.title } : null;
-            }
-        }] : [])
+        {
+            name: 'Vreden',
+            url: `https://api.vreden.my.id/api/ytmp3?url=${encodedUrl}`,
+            parse: d => d?.status && d?.result?.download?.url
+                ? {
+                    download: d.result.download.url,
+                    title: d.result.metadata?.title
+                }
+                : null
+        }
     ];
 
     for (const api of apis) {
@@ -111,24 +119,19 @@ async function downloadAudioBuffer(audioUrl) {
                 }
             });
 
-            const contentType = String(response.headers['content-type'] || '').toLowerCase();
+            const contentType =
+                response.headers['content-type'] || '';
 
             const buffer = Buffer.from(response.data);
 
             if (
                 buffer.length < 5000 ||
                 contentType.includes('text/html') ||
-                contentType.includes('application/json') ||
-                contentType.includes('text/plain')
+                contentType.includes('application/json')
             ) {
                 throw new Error('Invalid audio response');
             }
 
-            // Reject common HTML/JSON error payloads even when the provider lies about MIME type.
-            const head = buffer.subarray(0, 80).toString('utf8').trim().toLowerCase();
-            if (head.startsWith('<!doctype html') || head.startsWith('<html') || head.startsWith('{\"error')) {
-                throw new Error('Provider returned an error page instead of audio');
-            }
             return buffer;
 
         } catch (error) {
@@ -264,57 +267,103 @@ cmd({
 });
 
 // ============================================
-// LYRICS FINDER — returns legitimate lookup links, not full copyrighted lyrics
+// LYRICS COMMAND
 // ============================================
 
 cmd({
     pattern: 'lyrics',
-    alias: ['lyric', 'songlyrics'],
-    desc: 'Find song lyrics sources',
+    alias: ['lyric'],
+    desc: 'Search song lyrics',
     category: 'search',
     react: '📃',
-    use: '.lyrics <song name and artist>',
+    use: '.lyrics <song name>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     const query = (ctx.q || '').trim();
-    if (!query) return ctx.reply('📃 *RIZO HELL-MD LYRICS FINDER*\n\nUse: .lyrics song name artist\nExample: .lyrics Pal Pal Afusic');
-    try {
-        let title = query;
-        let artist = '';
-        try {
-            const found = await yts(query);
-            const video = found?.videos?.[0];
-            if (video) {
-                title = video.title || query;
-                artist = video.author?.name || '';
-            }
-        } catch (_) {}
-        let lrclibUrl = `https://lrclib.net/search/${encodeURIComponent(query)}`;
-        try {
-            const result = await axios.get('https://lrclib.net/api/search', {
-                params: { q: query }, timeout: 10000,
-                headers: { 'User-Agent': 'RIZO-HELL-MD/1.0 (lyrics link finder)' }
-            });
-            const row = Array.isArray(result.data) ? result.data.find(x => x?.trackName || x?.name) : null;
-            if (row?.id) lrclibUrl = `https://lrclib.net/search?q=${encodeURIComponent(query)}`;
-            if (row?.trackName) title = row.trackName;
-            if (row?.artistName) artist = row.artistName;
-        } catch (_) {}
-        const geniusUrl = `https://genius.com/search?q=${encodeURIComponent(query)}`;
-        const musixmatchUrl = `https://www.musixmatch.com/search/${encodeURIComponent(query)}`;
+
+    if (!query) {
         return ctx.reply(
-            `📃 *RIZO HELL-MD — LYRICS FINDER*\n\n` +
-            `🎵 *${String(title).slice(0, 180)}*\n` +
-            (artist ? `🎤 ${String(artist).slice(0, 100)}\n\n` : '\n') +
-            `🔎 *Lyrics sources:*\n` +
-            `• LRCLIB: ${lrclibUrl}\n` +
-            `• Genius: ${geniusUrl}\n` +
-            `• Musixmatch: ${musixmatchUrl}\n\n` +
-            `_Open a source to read lyrics where available._`
+            '📃 *RIZO HELL-MD LYRICS*\n\n' +
+            'Use: .lyrics song name\n' +
+            'Example: .lyrics Pal Pal Afusic'
         );
+    }
+
+    await conn.sendMessage(ctx.from, {
+        react: { text: '🔎', key: mek.key }
+    });
+
+    try {
+        const search = await yts(query);
+        const video = search?.videos?.[0];
+
+        if (!video) {
+            throw new Error('NO_RESULT');
+        }
+
+        const artist = video.author?.name || '';
+        const title = video.title || query;
+
+        // Lyrics.ovh public endpoint.
+        // It may not have every song or artist.
+        const lyricsResponse = await axios.get(
+            `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`,
+            {
+                timeout: 20000,
+                headers: {
+                    'User-Agent': MUSIC_CONFIG.userAgent
+                }
+            }
+        );
+
+        const lyrics = lyricsResponse.data?.lyrics?.trim();
+
+        if (!lyrics) {
+            throw new Error('LYRICS_NOT_FOUND');
+        }
+
+        // Send in smaller chunks to avoid oversized messages.
+        const header =
+            `📃 *RIZO HELL-MD LYRICS*\n\n` +
+            `🎵 ${title}\n` +
+            `🎤 ${artist}\n\n`;
+
+        const chunks = lyrics.match(/[\s\S]{1,3000}/g) || [];
+
+        for (let i = 0; i < chunks.length; i++) {
+            await conn.sendMessage(ctx.from, {
+                text: (i === 0 ? header : '') + chunks[i]
+            }, { quoted: mek });
+        }
+
+        await conn.sendMessage(ctx.from, {
+            react: { text: '✅', key: mek.key }
+        });
+
     } catch (error) {
         console.error('[RIZO LYRICS ERROR]', error.message);
-        return ctx.reply('❌ Lyrics search abhi unavailable hai. Thori dair baad try karo.');
+
+        await conn.sendMessage(ctx.from, {
+            react: { text: '❌', key: mek.key }
+        });
+
+        if (error.message === 'NO_RESULT') {
+            return ctx.reply('❌ Song search mein nahi mila.');
+        }
+
+        if (
+            error.message === 'LYRICS_NOT_FOUND' ||
+            error.response?.status === 404
+        ) {
+            return ctx.reply(
+                '❌ Is song ke lyrics available nahi hain.\n' +
+                'Song aur artist ka naam saath likh kar try karo.'
+            );
+        }
+
+        return ctx.reply(
+            '❌ Lyrics service abhi respond nahi kar rahi. Baad mein try karo.'
+        );
     }
 });
 

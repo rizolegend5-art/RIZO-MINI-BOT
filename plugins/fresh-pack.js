@@ -519,6 +519,25 @@ cmd({
 });
 
 // ===========================================================
-
-// NOTE: The following command in the supplied ZIP was truncated and has been omitted
-// so this plugin can load safely. Restore it from a complete source before re-adding.
+// 23. REPO — React on message via emoji
+// ===========================================================
+cmd({
+    pattern: 'rreact',
+    alias: ['reactmsg'],
+    desc: 'Kisi message pe custom reaction',
+    category: 'tools',
+    react: '😀',
+    use: '.rreact 🔥 (reply)',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    const quoted = mek.message?.extendedTextMessage?.contextInfo;
+    if (!quoted?.stanzaId) return ctx.reply('❌ Message pe reply karo.');
+    const emoji = (ctx.q || '').trim() || '🔥';
+    try {
+        await conn.sendMessage(ctx.from, {
+            react: {
+                text: emoji,
+                key: {
+                    remoteJid: ctx.from,
+                    fromMe: quoted.participant === conn.user.id.split(':')[0] + '@s.whatsapp.net',
+                    id: quot

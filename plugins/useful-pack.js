@@ -570,5 +570,15 @@ cmd({
     ].join('\n'));
 });
 
-// NOTE: The following command in the supplied ZIP was truncated and has been omitted
-// so this plugin can load safely. Restore it from a complete source before re-adding.
+// 23. CALORIE — Calorie needs
+cmd({
+    pattern: 'calorie',
+    alias: ['calcalc'],
+    desc: 'Daily calorie needs',
+    category: 'tools',
+    react: '🍎',
+    use: '.calorie 70 175 25 male',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    const args = (ctx.q || '').split(/\s+/);
+    

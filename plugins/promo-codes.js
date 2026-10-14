@@ -10,36 +10,36 @@ const { isOwner, isPremiumUser, cleanNumber } = require('../lib/premium-check');
 cmd({
     pattern: 'promo',
     alias: ['createpromo', 'promocode', 'genpromo'],
-    desc: 'Owner: referral-credit promo code banao (default 100 users, 24h)',
+    desc: 'Owner: Promo code banao (default 3 users)',
     category: 'owner',
     react: '🎟️',
-    use: '.promo <code> [maxUses=100] [expiresHours=24] [referralCredits=1]',
+    use: '.promo <code> [maxUses] [expiresHours]',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!isOwner(ctx)) return ctx.reply('⛔ Ye command sirf *Owner* ke liye hai.');
 
     const args = (ctx.q || '').trim().split(/\s+/);
     const code = args[0];
-    const maxUses = args[1] === undefined ? 100 : Number(args[1]);
-    const expiresHours = args[2] === undefined ? 24 : Number(args[2]);
-    const rewardCredits = args[3] === undefined ? 1 : Number(args[3]);
+    const maxUses = parseInt(args[1]) || 3;
+    const expiresHours = parseInt(args[2]) || null;
 
     if (!code) {
         return ctx.reply(
             `🎟️ *PROMO CODE GENERATOR*\n\n` +
-            `Use: \`${config.PREFIX}promo <code> [maxUses=100] [expiresHours=24] [referralCredits=1]\`\n\n` +
-            `Example: \`${config.PREFIX}promo RIZOPRO 100 24 3\`\n` +
-            `= 100 users, 24 hours, 3 referral credits per redeemer.`
+            `Use: \`${config.PREFIX}promo <code> [maxUses] [expiresHours]\`\n\n` +
+            `Examples:\n` +
+            `• \`${config.PREFIX}promo RIZO2026\` → 3 users\n` +
+            `• \`${config.PREFIX}promo VIP5 5\` → 5 users\n` +
+            `• \`${config.PREFIX}promo EID24 3 48\` → 3 users, 48hr`
         );
     }
 
     try {
-        const promo = await createPromoCode(code, maxUses, cleanNumber(ctx.senderNumber), expiresHours, rewardCredits);
+        const promo = await createPromoCode(code, maxUses, cleanNumber(ctx.senderNumber), expiresHours);
         return ctx.reply(
             `🎟️ *PROMO CODE CREATED!*\n\n` +
             `🔑 Code: *${promo.code}*\n` +
             `👥 Max Users: *${promo.maxUses}*\n` +
-            `🎁 Referral credits per user: *${promo.rewardCredits || 1}*\n` +
             `📅 Expires: *${promo.expiresAt ? promo.expiresAt.toLocaleString() : 'Never'}*\n\n` +
             `Users: \`${config.PREFIX}redeem ${promo.code}\``
         );
@@ -50,7 +50,7 @@ cmd({
 cmd({
     pattern: 'redeem',
     alias: ['promo-redeem', 'usecode', 'claimcode'],
-    desc: 'Promo code se referral credits hasil karo',
+    desc: 'Promo code se premium unlock karo',
     category: 'general',
     react: '🎁',
     use: '.redeem <code>',
@@ -69,8 +69,6 @@ cmd({
         if (!result.success) {
             const messages = {
                 invalid_code: '❌ Ye promo code *valid nahi* hai.',
-                invalid_user: '❌ Aapka number identify nahi ho saka.',
-                try_again: '⚠️ Redeem conflict hua, dobara try karo.',
                 inactive: '❌ Ye promo code *band* hai.',
                 expired: '⌛ Ye promo code *expire* ho gaya.',
                 already_used_by_you: '⚠️ Aap ye code *already use kar chuke* ho!',
@@ -79,16 +77,15 @@ cmd({
             return ctx.reply(messages[result.reason] || '❌ Code use nahi hua.');
         }
 
-        const { countReferralsForNumber } = require('../lib/database');
-        const totalCredits = await countReferralsForNumber(number);
+        await grantPromoPremium(number, code, 30);
+
         return ctx.reply(
-            `✅ *PROMO REDEEMED!*\n\n` +
+            `✅ *PREMIUM UNLOCKED!*\n\n` +
             `🎟️ Code: *${code}*\n` +
-            `🎁 Referral credits added: *${result.credits || 1}*\n` +
-            `👥 Your total referral credits: *${totalCredits}*\n` +
-            `📊 Remaining uses: *${result.remaining}/${result.total}*\n\n` +
-            `💎 Premium target: *${config.PREMIUM_REFERRALS}* credits\n` +
-            `Use \`${config.PREFIX}myref\` to check progress.`
+            `💎 Status: *Premium Active*\n` +
+            `📅 Valid: *30 days*\n\n` +
+            `👥 Remaining uses: *${result.remaining}/${result.total}*\n\n` +
+            `🎉 Try: \`${config.PREFIX}bugbotscript\``
         );
     } catch (e) { return ctx.reply('❌ Redeem fail: ' + e.message); }
 });
@@ -108,8 +105,8 @@ cmd({
         if (!codes.length) return ctx.reply(`📋 Use: \`${config.PREFIX}promo <code>\``);
 
         const lines = codes.map((c, i) => {
-            const status = c.usedCount >= c.maxUses ? '🚫 FULL' : c.active && (!c.expiresAt || c.expiresAt > new Date()) ? '✅ Active' : '❌ Expired/Inactive';
-            return `${i + 1}. *${c.code}* — ${c.usedCount}/${c.maxUses} used | +${c.rewardCredits || 1} credits/user | ${status} | expiry: ${c.expiresAt ? new Date(c.expiresAt).toLocaleString() : 'N/A'}`;
+            const status = c.usedCount >= c.maxUses ? '🚫 FULL' : c.active ? '✅ Active' : '❌ Inactive';
+            return `${i + 1}. *${c.code}* — ${c.usedCount}/${c.maxUses} ${status}`;
         });
         return ctx.reply(`🎟️ *YOUR PROMO CODES (${codes.length})*\n\n${lines.join('\n')}`);
     } catch (e) { return ctx.reply('❌ ' + e.message); }
