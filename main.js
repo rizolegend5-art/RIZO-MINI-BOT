@@ -28,8 +28,7 @@ const {
     saveOTPToMongoDB,
     verifyOTPFromMongoDB,
     incrementStats,
-    getStatsForNumber,
-    recordReferral
+    getStatsForNumber
 } = require('./lib/database');
 const { handleAntidelete } = require('./lib/antidelete');
 
@@ -46,109 +45,22 @@ const prefix = config.PREFIX;
 const mode = config.MODE || config.WORK_TYPE;
 const router = express.Router();
 
-// Bounded in-memory panel log buffer; never store credentials or message contents.
-const panelLogs = [];
-const PANEL_LOG_LIMIT = 300;
-const panelStartedAt = Date.now();
-
-function addPanelLog(level, message) {
-    panelLogs.push({ time: new Date().toISOString(), level, message: String(message).slice(0, 500) });
-    if (panelLogs.length > PANEL_LOG_LIMIT) panelLogs.shift();
-}
-
-function maskNumber(number) {
-    const n = String(number || '').replace(/\\D/g, '');
-    return n.length > 4 ? `${n.slice(0, 2)}••••••${n.slice(-2)}` : '••••';
-}
-
-function requirePanelAuth(req, res, next) {
-    const configured = process.env.RIZO_PANEL_TOKEN;
-    if (!configured) {
-        return res.status(503).json({ error: 'Panel is not configured. Set RIZO_PANEL_TOKEN in Railway Variables.' });
-    }
-    const supplied = Buffer.from(String(req.get('x-panel-token') || ''), 'utf8');
-    const expected = Buffer.from(configured, 'utf8');
-    const cryptoSafe = supplied.length === expected.length &&
-        crypto.timingSafeEqual(supplied, expected);
-    if (!cryptoSafe) return res.status(401).json({ error: 'Unauthorized' });
-    next();
-}
-
 // ===========================================================
 // 🆕 OWNER NUMBERS — config se (multi-number support)
 // ===========================================================
-const OWNER_NUMBERS = [...new Set([
-    ...(Array.isArray(config.OWNER_NUMBERS) ? config.OWNER_NUMBERS : []),
-    config.OWNER_NUMBER,
-    ...(process.env.OWNER_NUMBERS || '').split(',')
-].map(normalizeOwnerNumber).filter(Boolean))];
+const OWNER_NUMBERS = Array.isArray(config.OWNER_NUMBERS) && config.OWNER_NUMBERS.length
+    ? config.OWNER_NUMBERS
+    : ['923154734548', '3154734548'];
 
-function normalizeOwnerNumber(value) {
-    let raw = String(value || '').trim();
-    // JIDs can include device suffixes or server names; only compare the user part.
-    if (raw.includes('@')) raw = raw.split('@')[0];
-    if (raw.includes(':')) raw = raw.split(':')[0];
-    let number = raw.replace(/\D/g, '');
-    if (number.startsWith('00')) number = number.slice(2);
-    // Common mistake: "+92" prefix pasted on top of a number that still has its
-    // local leading 0 (e.g. "+920315xxxxxxx" instead of "+923154734548").
-    if (number.startsWith('920') && number.length === 13) number = '92' + number.slice(3);
-    if (number.startsWith('0')) number = '92' + number.slice(1);
-    if (number.length === 10 && number.startsWith('3')) number = '92' + number;
-    return number;
-}
-
-function isOwnerNumberCheck(number, alternate) {
-    const candidates = [number, alternate].map(normalizeOwnerNumber).filter(Boolean);
-    return candidates.some(clean => OWNER_NUMBERS.includes(clean));
-}
-
-function normalizeParticipantJid(value) {
-    if (!value) return '';
-    try { return jidNormalizedUser(String(value)).toLowerCase(); }
-    catch (_) { return String(value).replace(/:\d+(?=@)/, '').toLowerCase(); }
-}
-
-function sameParticipant(a, b) {
-    const aa = normalizeParticipantJid(a), bb = normalizeParticipantJid(b);
-    if (!aa || !bb) return false;
-    if (aa === bb) return true;
-    // Baileys multi-device may represent the same person as @lid and @s.whatsapp.net.
-    return normalizeOwnerNumber(aa) === normalizeOwnerNumber(bb) &&
-        Boolean(normalizeOwnerNumber(aa));
-}
-
-// Extract command text from normal, caption, ephemeral, view-once and interactive messages.
-function unwrapMessageContent(message) {
-    let current = message;
-    for (let i = 0; i < 5 && current; i++) {
-        const type = getContentType(current);
-        if (!type) break;
-        if (type === 'ephemeralMessage') current = current.ephemeralMessage?.message;
-        else if (type === 'viewOnceMessage' || type === 'viewOnceMessageV2' || type === 'viewOnceMessageV2Extension') current = current[type]?.message;
-        else if (type === 'documentWithCaptionMessage') current = current.documentWithCaptionMessage?.message;
-        else if (type === 'editedMessage') current = current.editedMessage?.message;
-        else break;
-    }
-    return current || message;
-}
-
-function extractTextBody(message) {
-    const content = unwrapMessageContent(message);
-    if (!content) return '';
-    const type = getContentType(content);
-    const node = content[type] || {};
-    if (type === 'conversation') return content.conversation || '';
-    if (type === 'extendedTextMessage') return node.text || '';
-    if (['imageMessage', 'videoMessage', 'documentMessage'].includes(type)) return node.caption || '';
-    if (type === 'buttonsResponseMessage') return node.selectedButtonId || node.selectedDisplayText || '';
-    if (type === 'listResponseMessage') return node.singleSelectReply?.selectedRowId || node.title || '';
-    if (type === 'templateButtonReplyMessage') return node.selectedId || node.selectedDisplayText || '';
-    if (type === 'interactiveResponseMessage') {
-        const params = node.nativeFlowResponseMessage?.paramsJson;
-        if (params) { try { const parsed = JSON.parse(params); return parsed.id || parsed.row_id || parsed.selected_id || ''; } catch (_) {} }
-    }
-    return '';
+function isOwnerNumberCheck(number) {
+    const clean = String(number || '').replace(/\D/g, '');
+    if (!clean) return false;
+    return OWNER_NUMBERS.some(o => {
+        const oClean = String(o).replace(/\D/g, '').replace(/^0/, '');
+        return clean === oClean ||
+               clean === '92' + oClean ||
+               clean === oClean.replace(/^92/, '');
+    });
 }
 
 connectdb();
@@ -250,13 +162,10 @@ function createarslanStore() {
 const createSerial = (size) => crypto.randomBytes(size).toString('hex').slice(0, size);
 
 const getGroupAdmins = (participants) => {
-    const admins = [];
-    for (const participant of (participants || [])) {
-        if (participant.admin == null) continue;
-        // Keep every known identifier; Baileys v7 can expose LID and phone JIDs.
-        for (const jid of [participant.id, participant.jid, participant.phoneNumber, participant.lid]) {
-            if (jid && !admins.includes(jid)) admins.push(jid);
-        }
+    let admins = [];
+    for (let i of participants) {
+        if (i.admin == null) continue;
+        admins.push(i.id);
     }
     return admins;
 };
@@ -291,16 +200,14 @@ function getConnectionStatus(number) {
 
 function arslanLog(message, type = 'info') {
     const icons = { info: '📝', success: '✅', error: '❌', warning: '⚠️', debug: '🐛' };
-    const timestamp = new Date().toISOString();
-    console.log(`${icons[type] || '📝'} [RIZO-MD] ${timestamp}: ${message}`);
-    addPanelLog(type, message);
+    console.log(`${icons[type] || '📝'} [RIZO-MD] ${new Date().toISOString()}: ${message}`);
 }
 
 // Load Plugins
 const pluginsDir = path.join(__dirname, 'plugins');
 if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
-const pluginFiles = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js') && f.toLowerCase() !== 'nsfw-girls.js');
-arslanLog(`Loading ${pluginFiles.length} plugins (adult-content plugin excluded)...`, 'info');
+const pluginFiles = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js'));
+arslanLog(`Loading ${pluginFiles.length} plugins...`, 'info');
 for (const file of pluginFiles) {
     try { require(path.join(pluginsDir, file)); }
     catch (e) { arslanLog(`Failed to load plugin ${file}: ${e.message}`, 'error'); }
@@ -584,7 +491,9 @@ async function arslanPair(number, res = null) {
 
                 const userConfig = await getUserConfigFromMongoDB(number);
 
-                mek.message = unwrapMessageContent(mek.message);
+                mek.message = (getContentType(mek.message) === 'ephemeralMessage')
+                    ? mek.message.ephemeralMessage.message
+                    : mek.message;
 
                 if (userConfig.READ_MESSAGE === 'true') await conn.readMessages([mek.key]);
 
@@ -620,12 +529,12 @@ async function arslanPair(number, res = null) {
                 const m = sms(conn, mek);
                 const type = getContentType(mek.message);
                 const from = mek.key.remoteJid;
-                const body = extractTextBody(mek.message).trim();
-                const configuredPrefix = String(config.PREFIX || '.');
-                const isCmd = Boolean(body) && body.startsWith(configuredPrefix);
-                const commandLine = isCmd ? body.slice(configuredPrefix.length).trim() : '';
-                const command = commandLine ? commandLine.split(/\s+/)[0].toLowerCase() : '';
-                const args = commandLine ? commandLine.split(/\s+/).slice(1) : [];
+                const body = (type === 'conversation') ? mek.message.conversation
+                    : (type === 'extendedTextMessage') ? mek.message.extendedTextMessage.text : '';
+
+                const isCmd = body.startsWith(config.PREFIX);
+                const command = isCmd ? body.slice(config.PREFIX.length).trim().split(' ').shift().toLowerCase() : '';
+                const args = body.trim().split(/ +/).slice(1);
                 const q = args.join(' ');
                 const text = q;
                 const isGroup = from.endsWith('@g.us');
@@ -633,21 +542,18 @@ async function arslanPair(number, res = null) {
                 const sender = mek.key.fromMe
                     ? (conn.user.id.split(':')[0] + '@s.whatsapp.net')
                     : (mek.key.participant || mek.key.remoteJid);
-                const senderNumber = sender.split('@')[0].split(':')[0];
-                const botNumber = conn.user.id.split('@')[0].split(':')[0];
+                const senderNumber = sender.split('@')[0];
+                const botNumber = conn.user.id.split(':')[0];
                 const botNumber2 = await jidNormalizedUser(conn.user.id);
                 const pushname = mek.pushName || 'User';
 
-                const isMe = Boolean(mek.key.fromMe) || sameParticipant(sender, conn.user.id) || sameParticipant(sender, conn.user.lid);
+                const isMe = botNumber.includes(senderNumber);
 
                 // ===========================================================
                 // 🆕 OWNER CHECK — Multi-number
                 // ===========================================================
-                const senderAlt = mek.key.participantAlt || mek.key.participantPn || mek.key.remoteJidAlt || mek.key.senderPn || '';
-                const isOwnerNum = isOwnerNumberCheck(senderNumber, senderAlt);
-                // Owner privilege is tied ONLY to the configured owner number.
-                // Being the connected WhatsApp session (isMe) does not grant owner powers.
-                const isOwner = isOwnerNum;
+                const isOwnerNum = isOwnerNumberCheck(senderNumber);
+                const isOwner = isOwnerNum || isMe;
                 const isCreator = isOwner;
 
                 // Owner command log
@@ -664,8 +570,8 @@ async function arslanPair(number, res = null) {
                         groupName = groupMetadata.subject;
                         participants = groupMetadata.participants;
                         groupAdmins = getGroupAdmins(participants);
-                        isBotAdmins = groupAdmins.some(jid => sameParticipant(jid, botNumber2) || sameParticipant(jid, conn.user.id) || sameParticipant(jid, conn.user.lid));
-                        isAdmins = groupAdmins.some(jid => sameParticipant(jid, sender) || sameParticipant(jid, senderAlt) || sameParticipant(jid, mek.key.participantPn));
+                        isBotAdmins = groupAdmins.includes(botNumber2);
+                        isAdmins = groupAdmins.includes(sender);
                     } catch (_) {}
                 }
 
@@ -688,7 +594,7 @@ async function arslanPair(number, res = null) {
 
                 if (isCmd) {
                     await incrementStats(sanitizedNumber, 'commandsUsed');
-                    const cmd = typeof events.findCommand === 'function' ? events.findCommand(command) : (events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command))); 
+                    const cmd = events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command));
                     if (cmd) {
                         // 🆕 PRIVATE MODE — sirf owner (aur bot khud)
                         if (String(config.WORK_TYPE).toLowerCase() === 'private' && !isOwnerNum && !isMe) {
@@ -698,7 +604,7 @@ async function arslanPair(number, res = null) {
 
                         if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
                         try {
-                            await cmd.function(conn, mek, m, {
+                            cmd.function(conn, mek, m, {
                                 from, quoted: mek, body, isCmd, command, args, q, text,
                                 isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
                                 isMe, isOwner, isCreator,
@@ -714,7 +620,7 @@ async function arslanPair(number, res = null) {
                 await incrementStats(sanitizedNumber, 'messagesReceived');
                 if (isGroup) await incrementStats(sanitizedNumber, 'groupsInteracted');
 
-                for (const evCmd of events.commands) {
+                events.commands.map(async (evCmd) => {
                     const ctx = {
                         from, l, quoted: mek, body, isCmd, command, args, q, text,
                         isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
@@ -722,15 +628,11 @@ async function arslanPair(number, res = null) {
                         groupMetadata, groupName, participants, groupAdmins,
                         isBotAdmins, isAdmins, reply, config, myquoted
                     };
-                    try {
-                        if (body && evCmd.on === 'body') await evCmd.function(conn, mek, m, ctx);
-                        else if (mek.q && evCmd.on === 'text') await evCmd.function(conn, mek, m, ctx);
-                        else if ((evCmd.on === 'image' || evCmd.on === 'photo') && mek.type === 'imageMessage') await evCmd.function(conn, mek, m, ctx);
-                        else if (evCmd.on === 'sticker' && mek.type === 'stickerMessage') await evCmd.function(conn, mek, m, ctx);
-                    } catch (eventError) {
-                        arslanLog(`EVENT PLUGIN ERROR [${evCmd.on || 'unknown'}]: ${eventError.message}`, 'error');
-                    }
-                }
+                    if (body && evCmd.on === 'body') evCmd.function(conn, mek, m, ctx);
+                    else if (mek.q && evCmd.on === 'text') evCmd.function(conn, mek, m, ctx);
+                    else if ((evCmd.on === 'image' || evCmd.on === 'photo') && mek.type === 'imageMessage') evCmd.function(conn, mek, m, ctx);
+                    else if (evCmd.on === 'sticker' && mek.type === 'stickerMessage') evCmd.function(conn, mek, m, ctx);
+                });
 
             } catch (e) {
                 arslanLog(`Message handler error: ${e.message}`, 'error');
@@ -748,77 +650,8 @@ async function arslanPair(number, res = null) {
 // ===========================================================
 // ROUTES
 // ===========================================================
-router.get('/panel', (req, res) => res.sendFile(path.join(__dirname, 'panel.html')));
-
-// Public liveness endpoint: no secrets, phone numbers, or resource details.
-router.get('/api/health', (req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.json({ ok: true, service: 'RIZO Mini Bot', timestamp: new Date().toISOString() });
-});
-
-// Protected monitoring endpoints. Configure RIZO_PANEL_TOKEN in Railway Variables.
-router.get('/api/panel/metrics', requirePanelAuth, (req, res) => {
-    const mem = process.memoryUsage();
-    const connected = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected);
-    const sessions = connected.map(number => {
-        const created = socketCreationTime.get(number);
-        return {
-            number: maskNumber(number),
-            connected: true,
-            uptimeSeconds: created ? Math.floor((Date.now() - created) / 1000) : 0
-        };
-    });
-    res.set('Cache-Control', 'no-store');
-    res.json({
-        service: 'RIZO Mini Bot',
-        status: 'online',
-        timestamp: new Date().toISOString(),
-        processUptimeSeconds: Math.floor(process.uptime()),
-        processStartedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
-        panelStartedAt: new Date(panelStartedAt).toISOString(),
-        memory: {
-            rssMB: +(mem.rss / 1048576).toFixed(1),
-            heapUsedMB: +(mem.heapUsed / 1048576).toFixed(1),
-            heapTotalMB: +(mem.heapTotal / 1048576).toFixed(1),
-            externalMB: +(mem.external / 1048576).toFixed(1)
-        },
-        system: {
-            platform: process.platform,
-            nodeVersion: process.version,
-            cpuCores: require('os').cpus().length,
-            hostTotalMemoryMB: +(require('os').totalmem() / 1048576).toFixed(0),
-            hostFreeMemoryMB: +(require('os').freemem() / 1048576).toFixed(0),
-            loadAverage: require('os').loadavg()
-        },
-        sessions: { connected: sessions.length, tracked: activeSockets.size, items: sessions }
-    });
-});
-
-router.get('/api/panel/logs', requirePanelAuth, (req, res) => {
-    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
-    res.set('Cache-Control', 'no-store');
-    res.json({ logs: panelLogs.slice(-limit).reverse() });
-});
-
 router.get('/', (req, res) => res.sendFile(path.join(__dirname, 'pair.html')));
-router.get('/code', async (req, res) => {
-    if (!req.query.number) return res.status(400).json({ error: 'Number required' });
-    const referralCode = String(req.query.ref || '').trim().toUpperCase();
-    const number = String(req.query.number).replace(/[^0-9]/g, '');
-    // Attribute referral only when the pairing endpoint successfully returns a code.
-    // Each referred number can be credited once; self-referrals are rejected in database.js.
-    const trackedRes = Object.create(res);
-    trackedRes.json = (payload) => {
-        if (payload && payload.code && referralCode) {
-            recordReferral(referralCode, number).then(result => {
-                if (result.recorded) console.log(`[REFERRAL] ${number} attributed to ${referralCode}`);
-                else if (!['already_counted'].includes(result.reason)) console.log(`[REFERRAL] not recorded: ${result.reason}`);
-            }).catch(err => console.error('[REFERRAL] attribution failed:', err.message));
-        }
-        return res.json(payload);
-    };
-    await arslanPair(req.query.number, trackedRes);
-});
+router.get('/code', async (req, res) => { if (!req.query.number) return res.json({ error: 'Number required' }); await arslanPair(req.query.number, res); });
 router.get('/status', async (req, res) => {
     const { number } = req.query;
     if (!number) {
