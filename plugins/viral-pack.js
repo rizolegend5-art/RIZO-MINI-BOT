@@ -552,33 +552,5 @@ cmd({
     } catch (e) { return ctx.reply('❌ ' + e.message); }
 });
 
-// 15. COMPRESS — Image compress
-cmd({
-    pattern: 'compressimg',
-    alias: ['imgsmall'],
-    desc: 'Image compress karo',
-    category: 'image',
-    react: '📉',
-    filename: __filename
-}, async (conn, mek, m, ctx) => {
-    const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    const img = quoted?.imageMessage || mek.message?.imageMessage;
-    if (!img) return ctx.reply('❌ Image pe reply karo.');
-
-    try {
-        const filePath = await conn.downloadAndSaveMediaMessage(
-            { msg: img, mtype: 'imageMessage' },
-            `./tmp/comp_${Date.now()}`
-        );
-        const original = (await fs.stat(filePath)).size;
-
-        const sharp = require('sharp');
-        const out = `./tmp/comp_out_${Date.now()}.jpg`;
-        await sharp(filePath).jpeg({ quality: 40 }).toFile(out);
-
-        const compressed = (await fs.stat(out)).size;
-        const saved = ((1 - compressed / original) * 100).toFixed(1);
-
-        await conn.sendMessage(ctx.from, {
-            image: { url: out },
-      
+// NOTE: The following command in the supplied ZIP was truncated and has been omitted
+// so this plugin can load safely. Restore it from a complete source before re-adding.

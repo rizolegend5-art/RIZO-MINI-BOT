@@ -12,6 +12,10 @@ const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
 
+// Prefer the npm-bundled FFmpeg binary on Railway; do not depend on system ffmpeg/python3.
+let FFMPEG_BIN = 'ffmpeg';
+try { FFMPEG_BIN = require('@ffmpeg-installer/ffmpeg').path || 'ffmpeg'; } catch (_) {}
+
 let EdgeTTS = null;
 
 try {
@@ -74,7 +78,7 @@ async function createVoice(text, voice) {
 
         // -y must be before the output file.
         // Force real OGG container with Opus codec.
-        await execFileAsync('ffmpeg', [
+        await execFileAsync(FFMPEG_BIN, [
             '-hide_banner',
             '-loglevel', 'error',
             '-y',
@@ -192,19 +196,18 @@ async function handleTTS(conn, mek, ctx, input, defaultVoice) {
             react: { text: '❌', key: mek.key }
         });
 
-        if (
-            error.message === 'EDGE_TTS_MISSING' ||
-            error.code === 'ENOENT'
-        ) {
+        if (error.message === 'EDGE_TTS_MISSING') {
             return ctx.reply(
-                '❌ TTS setup incomplete hai.\n' +
-                'Railway par Edge-TTS aur FFmpeg install/check karo.'
+                '❌ TTS package missing hai. Railway par npm install/redeploy karo.'
             );
         }
 
+        if (error.code === 'ENOENT') {
+            return ctx.reply('❌ Audio converter nahi mila. Railway par dependencies reinstall karke redeploy karo.');
+        }
         return ctx.reply(
             '❌ Voice generate nahi hui.\n' +
-            'Railway deployment logs mein RIZO TTS error check karo.'
+            'Railway deployment logs mein [RIZO TTS ERROR] check karo.'
         );
     }
 }

@@ -600,20 +600,5 @@ cmd({
     return ctx.reply(fortunes[crypto.randomInt(fortunes.length)]);
 });
 
-// 29. LUCKY — Lucky number
-cmd({
-    pattern: 'lucky',
-    alias: ['luckynum', 'lucky7'],
-    desc: 'Lucky number',
-    category: 'fun',
-    react: '🍀',
-    filename: __filename
-}, async (conn, mek, m, ctx) => {
-    const num = crypto.randomInt(1, 101);
-    const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Pink', 'Orange'];
-    const color = colors[crypto.randomInt(colors.length)];
-
-    return ctx.reply([
-        '🍀 *LUCKY TODAY*',
-        '',
-        `🔢 Luck
+// NOTE: The following command in the supplied ZIP was truncated and has been omitted
+// so this plugin can load safely. Restore it from a complete source before re-adding.
