@@ -1,38 +1,19 @@
-# RIZO HELL-MD — Owner access and Railway setup
+# Owner and group access
 
-## Owner number
-The configured personal owner number is **03154734548** (international format **923154734548**). The WhatsApp account used to pair/connect the bot can be a different number. Send owner commands from the personal owner number to the bot's WhatsApp chat; do not use the bot's own connected number as your personal owner identity.
+## Owner identity
 
-If you deploy this ZIP to Railway, set these Variables under **Service → Variables**:
+The WhatsApp account paired to a session is automatically treated as that bot's owner. Owner commands work from that account, including when it sends a command in a group. `OWNER_NUMBER` and comma-separated `OWNER_NUMBERS` are optional extra owner accounts; configure them in your deployment's private environment variables and restart after changes.
 
-- `OWNER_NUMBER` = `923154734548`
-- `MONGODB_URI` = your own MongoDB connection string (required for persistent sessions/referrals)
-- `PREFIX` = `.` (optional)
-- `PAIR_BASE_URL` = your Railway public URL (optional; used by referral links)
+The `.owner` contact command is owner-only and sends the contact card privately to the command sender. Public menus and bot information do not reveal the owner number.
 
-Do not paste your database URI or any API keys into public chats or commit them to GitHub. The ZIP intentionally does not include a database password.
+## Group commands
 
-## Added lightweight commands
-- `.uptime` / `.runtime` — process uptime
-- `.botinfo` — runtime / memory / platform info
-- `.owner` — official owner contact
-- `.groupinfo` / `.ginfo` — current group details
-- `.admins` — list group admins
-- `.jid` — current chat and sender IDs
-- `.calc  (25 + 5) * 2` — safe basic calculator
-- `.base64enc text` / `.base64dec <encoded>` — Base64 conversion
-- `.reverse hello` — reverse text
-- `.charcount text` — character, word and line counts
+Commands in the `group` and `admin` categories require a group admin or the paired bot owner. Actions that change group membership or settings still require the bot account to have the corresponding WhatsApp admin permission.
 
-Existing plugins and commands were retained. The lyrics command now tries Lyrics.ovh and LRCLIB fallback search; availability still depends on the song being indexed by those providers. Song audio uses the existing multi-provider fallback and still depends on external downloader services being online.
+## Bot name and picture
 
-## MongoDB Atlas connection (security)
-The app already reads `MONGODB_URI` from environment variables; no password is hardcoded in this ZIP.
+Set `BOT_NAME` and `IMAGE_PATH` in the deployment environment to choose the default display name and menu/connection image. `.setbotname` changes the WhatsApp profile name and current-process command branding; set `BOT_NAME` to keep the name after a restart. `.setpp` changes the WhatsApp profile picture.
 
-1. Because a database URI was pasted into chat, open MongoDB Atlas and rotate/change that database user's password before deployment. Update the URI to use the new password.
-2. In Railway, open your project → the bot service → **Variables** → **New Variable**.
-3. Set the variable name to `MONGODB_URI` and the value to the new Atlas connection string. Keep it private; do not put it in GitHub or inside the ZIP.
-4. In Atlas, ensure Network Access permits your deployment environment. Prefer a restricted allowlist where feasible; avoid broad public access when possible.
-5. Redeploy/restart the Railway service and check logs for `Database Connected Successfully`. If connection fails, check the username/password URL-encoding, database user permissions, and Atlas network access.
+## Deployment checks
 
-`.env.example` is only a template; it contains no real credentials. For local testing, copy it to `.env` and fill in your rotated URI. Keep `.env` out of version control.
+Keep `MONGODB_URI`, `ALYACHAN_API_KEY`, `ISLAMIC_DL_API_KEY`, and panel tokens in the deployment's secret/environment-variable store. Use `npm run check:all` for JavaScript syntax validation. Song and other third-party API services require a live deployment to verify; their uptime is not guaranteed by the source code.

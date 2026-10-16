@@ -138,23 +138,24 @@ A private live monitoring dashboard is available at `/panel` on the same Railway
 - Keep `RIZO_PANEL_TOKEN` private. This is an additional monitoring feature; it does not replace Railway access controls or a full admin authentication system.
 
 
-## RIZO fixes: owner, group permissions, song and anime APIs
+## Current setup and command permissions
 
-Set these in Railway → Variables (do not commit real keys):
+The WhatsApp account used to pair a bot session is automatically its owner. Optional `OWNER_NUMBER` / `OWNER_NUMBERS` values can add configured owner accounts; set them only in your host's private environment variables, not in this ZIP.
 
-- `OWNER_NUMBER`: the actual owner WhatsApp number in international digits, e.g. `923XXXXXXXXX` (no `+`).
-- `OWNER_NUMBERS`: optional comma-separated extra owner numbers.
-- `ALYACHAN_API_KEY`: optional key for the AlyaChan YouTube MP3 fallback.
+Useful environment variables:
 
-The bot reads owner settings at startup, so redeploy/restart after changing them. Song download tries multiple providers in sequence; public API availability can change, so no third-party provider can be guaranteed 24/7. `.lyrics` now returns lookup links and song metadata instead of reposting full copyrighted lyrics. Anime image search tries Jikan character search, Jikan series posters, then a SFW random-image fallback. Group admin checks now compare normalized Baileys JIDs and alternate phone/LID identifiers where available.
+- `BOT_NAME` — visible bot name; default: `RIZO Mini Bot`.
+- `BOT_FOOTER` — optional message footer.
+- `IMAGE_PATH` — image used by menus and connection messages.
+- `OWNER_NUMBER` / `OWNER_NUMBERS` — optional configured owner contact(s).
+- `OWNER_DISPLAY_NUMBER` — optional owner-only display value; the public menu does not show owner numbers.
+- `MONGODB_URI` — database connection for sessions and settings.
+- `RIZO_PANEL_TOKEN` — optional private monitoring panel token.
+- `ALYACHAN_API_KEY` — optional audio-download fallback key.
+- `ISLAMIC_DL_API_KEY` — optional key for the Islamic video-download provider.
 
+Run `npm install`, set environment variables in your hosting provider's secret store, then run `npm start`. Run `npm run check:all` for the JavaScript syntax check. Group/admin commands are limited to group admins and the paired bot owner; some actions also require the bot itself to be a group admin.
 
-## Command reliability and owner setup
+Duplicate command registrations now resolve to one canonical command instead of exposing plugin filenames in the menu. The menu puts everyday commands first and fun/emotion commands later. The ping command sends one result message, and song playback sends its thumbnail before attempting the audio download.
 
-- Configure Railway Variables: `OWNER_NUMBER=923XXXXXXXXX` (digits only, your actual owner number). Optional: `OWNER_NUMBERS=923XXXXXXXXX,923YYYYYYYYY` for multiple owners.
-- Redeploy after changing variables because the owner list is read at startup.
-- Run `npm run check:all` to syntax-check JavaScript files.
-- See `COMMAND_AUDIT.md` for duplicate command names and the current command inventory. Duplicate handlers remain accessible under a generated filename-suffixed command while the latest handler keeps the normal command name.
-- Commands that modify group settings still require WhatsApp group-admin permissions, and some actions require the bot itself to be a group admin.
-- Adult-content plugin is not loaded.
-- Syntax checks do not prove third-party APIs or a live WhatsApp session are online.
+Third-party downloader/API availability and live WhatsApp behavior depend on the deployment environment. Source checks do not guarantee those external services are online.

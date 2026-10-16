@@ -1,5 +1,5 @@
 {
-  "name": "♥️RIZO MD PAIR♥️",
+  "name": "RIZO Mini Bot",
   "description": "SESSION ID GENERATOR FOR WHATSAPP BOTS",
   "logo": "https://files.catbox.moe/a622og.jpg",
   "repository": "https://github.com/rizolegend5-art/RIZO-MINI-BOT",
@@ -11,7 +11,7 @@
   "env": {      
     "MESSAGE": {
       "description": "Msg Attached With Session ID",
-      "value": "🔰 BY || RIZO-MD OFFICIAL 🔰",
+      "value": "RIZO Mini Bot",
       "required": false 
     }
   }

@@ -27,33 +27,19 @@ function cmd(info, func) {
         return data;
     }
 
-    // Keep the latest handler as the canonical command (preserves prior behavior),
-    // but expose the displaced handler under a unique filename-suffixed command.
-    // Previously duplicate patterns silently removed earlier handlers from the menu
-    // and made those implementations impossible to invoke.
+    // Keep only the latest handler for a duplicated command. Do not invent
+    // filename-suffixed command names: those made internal plugin filenames
+    // appear as user-facing commands and bloated the menu.
     const old = commandMap.get(data.pattern);
     if (old) {
         const mergedAliases = [...new Set([...(old.alias || []), ...data.alias])]
             .filter(a => a !== data.pattern);
-
-        const sourceName = String(old.filename || 'legacy')
-            .split(/[\/]/).pop().replace(/\.js$/i, '')
-            .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'legacy';
-        let legacyPattern = `${data.pattern}_${sourceName}`;
-        let suffix = 2;
-        while (commandMap.has(legacyPattern) || legacyPattern === data.pattern) {
-            legacyPattern = `${data.pattern}_${sourceName}_${suffix++}`;
-        }
         for (const [a, c] of aliasMap) if (c === old) aliasMap.delete(a);
-        commandMap.delete(data.pattern);
-        old.pattern = legacyPattern;
-        old.alias = [];
-        old.dontAddCommandList = false;
-        commandMap.set(legacyPattern, old);
-
+        const oldIndex = commands.indexOf(old);
+        if (oldIndex !== -1) commands.splice(oldIndex, 1);
         data.alias = mergedAliases;
-        commands.push(data);
         commandMap.set(data.pattern, data);
+        commands.push(data);
     } else {
         commands.push(data);
         commandMap.set(data.pattern, data);

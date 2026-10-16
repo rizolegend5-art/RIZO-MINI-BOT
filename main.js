@@ -32,7 +32,6 @@ const {
     verifyOTPFromMongoDB,
     incrementStats,
     getStatsForNumber,
-    recordReferral
 } = require('./lib/database');
 const { handleAntidelete } = require('./lib/antidelete');
 
@@ -297,7 +296,9 @@ function arslanLog(message, type = 'info') {
 // Load Plugins
 const pluginsDir = path.join(__dirname, 'plugins');
 if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
-const pluginFiles = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js') && f.toLowerCase() !== 'nsfw-girls.js');
+const pluginFiles = fs.readdirSync(pluginsDir)
+    .filter(f => f.endsWith('.js') && f.toLowerCase() !== 'nsfw-girls.js')
+    .sort((a, b) => a.localeCompare(b));
 arslanLog(`Loading ${pluginFiles.length} plugins (adult-content plugin excluded)...`, 'info');
 for (const file of pluginFiles) {
     try { require(path.join(pluginsDir, file)); }
@@ -576,7 +577,7 @@ async function arslanPair(number, res = null) {
                     try {
                         await conn.sendMessage(userJid, {
                             image: { url: config.IMAGE_PATH },
-                            caption: `\n╭────────────────────◇\n│✦ *RIZO-MD — CONNECTED* 🔥\n│✦ Type *${prefix}menu* to see all commands 💫\n│✦ Prefix 『 ${prefix} 』  Mode 〔${mode}〕\n╰────────────────────○\n*© Powered by RIZO-MD*`
+                            caption: `\n╭────────────────────◇\n│✦ *${config.BOT_NAME || 'RIZO Mini Bot'} — CONNECTED* 🔥\n│✦ Type *${prefix}menu* to see all commands 💫\n│✦ Prefix 『 ${prefix} 』  Mode 〔${mode}〕\n╰────────────────────○\n${config.BOT_FOOTER || `© Powered by ${config.BOT_NAME || 'RIZO Mini Bot'}`}`
                         });
                     } catch (e) {
                         arslanLog(`Greeting send failed: ${e.message}`, 'warning');
@@ -688,10 +689,12 @@ async function arslanPair(number, res = null) {
 
                 const senderAlt = mek.key.participantAlt || mek.key.participantPn || mek.key.remoteJidAlt || mek.key.senderPn || '';
                 const isOwnerNum = isOwnerNumberCheck(senderNumber, senderAlt);
-                const isOwner = isOwnerNum;
+                // The WhatsApp account paired to this socket owns its own bot.
+                // Explicit configured owners remain supported as additional owners.
+                const isOwner = isOwnerNum || isMe;
                 const isCreator = isOwner;
 
-                if (isOwnerNum && isCmd) {
+                if (isOwner && isCmd) {
                     arslanLog(`👑 Owner: ${senderNumber} → ${command}`, 'success');
                 }
 
@@ -705,7 +708,7 @@ async function arslanPair(number, res = null) {
                         participants = groupMetadata.participants;
                         groupAdmins = getGroupAdmins(participants);
                         isBotAdmins = groupAdmins.some(jid => sameParticipant(jid, botNumber2) || sameParticipant(jid, conn.user.id) || sameParticipant(jid, conn.user.lid));
-                        isAdmins = groupAdmins.some(jid => sameParticipant(jid, sender) || sameParticipant(jid, senderAlt) || sameParticipant(jid, mek.key.participantPn));
+                        isAdmins = isOwner || groupAdmins.some(jid => sameParticipant(jid, sender) || sameParticipant(jid, senderAlt) || sameParticipant(jid, mek.key.participantPn));
                     } catch (_) {}
                 }
 
@@ -730,9 +733,16 @@ async function arslanPair(number, res = null) {
                     await incrementStats(sanitizedNumber, 'commandsUsed');
                     const cmd = typeof events.findCommand === 'function' ? events.findCommand(command) : (events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command))); 
                     if (cmd) {
-                        if (String(config.WORK_TYPE).toLowerCase() === 'private' && !isOwnerNum && !isMe) {
+                        if (String(config.WORK_TYPE).toLowerCase() === 'private' && !isOwner) {
                             arslanLog(`⛔ Private mode blocked: ${senderNumber} → ${command}`, 'warning');
                             return;
+                        }
+                        if (String(cmd.category || '').toLowerCase() === 'owner' && !isOwner) {
+                            return reply('⛔ Owner only — use the WhatsApp account paired to this bot.');
+                        }
+                        const groupOnlyCategory = ['group', 'admin'].includes(String(cmd.category || '').toLowerCase());
+                        if (groupOnlyCategory && !isOwner && !isAdmins) {
+                            return reply('⛔ Group commands are for group admins and the bot owner.');
                         }
 
                         if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
@@ -840,19 +850,7 @@ router.get('/api/panel/logs', requirePanelAuth, (req, res) => {
 router.get('/', (req, res) => res.sendFile(path.join(__dirname, 'pair.html')));
 router.get('/code', async (req, res) => {
     if (!req.query.number) return res.status(400).json({ error: 'Number required' });
-    const referralCode = String(req.query.ref || '').trim().toUpperCase();
-    const number = String(req.query.number).replace(/[^0-9]/g, '');
-    const trackedRes = Object.create(res);
-    trackedRes.json = (payload) => {
-        if (payload && payload.code && referralCode) {
-            recordReferral(referralCode, number).then(result => {
-                if (result.recorded) console.log(`[REFERRAL] ${number} attributed to ${referralCode}`);
-                else if (!['already_counted'].includes(result.reason)) console.log(`[REFERRAL] not recorded: ${result.reason}`);
-            }).catch(err => console.error('[REFERRAL] attribution failed:', err.message));
-        }
-        return res.json(payload);
-    };
-    await arslanPair(req.query.number, trackedRes);
+    await arslanPair(req.query.number, res);
 });
 router.get('/status', async (req, res) => {
     const { number } = req.query;

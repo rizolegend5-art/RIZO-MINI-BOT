@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0716">
-<title>RIZO MINI BOT · Pair Code</title>
+<title>RIZO Mini Bot · Pair Code</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
@@ -133,15 +133,14 @@ footer strong{color:var(--muted);font-weight:600}
 <main class="card">
   <header class="brand">
     <div class="logo"><span><img src="https://files.catbox.moe/a622og.jpg" alt="" onerror="this.replaceWith('👑')"></span></div>
-    <h1>RIZO MINl BOT V3</h1>
+    <h1>RIZO Mini Bot</h1>
     <p class="sub">Link your WhatsApp with a pair code</p>
-  <p id="refNotice" class="sub" style="display:none;margin-top:12px;color:#3ddc97">🎁 You opened a RIZO referral link!</p>
   </header>
 
   <label for="number">WhatsApp number</label>
   <div class="field">
     <b>+</b>
-    <input id="number" type="tel" inputmode="numeric" autocomplete="tel" placeholder="923000000000" maxlength="18">
+    <input id="number" type="tel" inputmode="numeric" autocomplete="tel" placeholder="923XXXXXXXXX" maxlength="18">
   </div>
   <p class="hint">Country code ke saath likho, bina + ya space ke.</p>
 
@@ -164,8 +163,8 @@ footer strong{color:var(--muted);font-weight:600}
   </section>
 
   <footer>
-    <strong>RIZO-MD Mini Bot</strong><br>
-    Made by RIZO-MD · Edition 2026 💗💞❤️🚫💓🚫🚫🥱☠️💀
+    <strong>RIZO Mini Bot</strong><br>
+    WhatsApp pairing
   </footer>
 </main>
 
@@ -173,9 +172,6 @@ footer strong{color:var(--muted);font-weight:600}
 const $ = id => document.getElementById(id);
 const input = $('number'), go = $('go'), goText = $('goText');
 const result = $('result'), codeBox = $('codeBox'), copyBtn = $('copyBtn'), steps = $('steps');
-const params = new URLSearchParams(window.location.search);
-const referralCode = (params.get('ref') || '').trim().toUpperCase();
-if (referralCode && /^[A-F0-9]{6,20}$/.test(referralCode)) $('refNotice').style.display = 'block';
 let currentCode = '';
 
 const messages = {
@@ -207,7 +203,6 @@ async function getCode() {
   show('Code ban raha hai...', 'wait');
   try {
     const query = new URLSearchParams({ number: num });
-    if (referralCode && /^[A-F0-9]{6,20}$/.test(referralCode)) query.set('ref', referralCode);
     const res = await fetch('/code?' + query.toString());
     const data = await res.json();
     if (data.code) {

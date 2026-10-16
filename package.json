@@ -1,6 +1,6 @@
 {
   "name": "rizo-bot",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "RIZO HELL-MD WhatsApp Bot \u2014 persistent settings, anime metadata and video-link commands",
   "main": "index.js",
   "scripts": {

@@ -16,18 +16,16 @@ module.exports = {
     // 2. BOT INFO
     // ===========================================================
     PREFIX: process.env.PREFIX || ".",
-    // Single authorized owner. The WhatsApp session number is NOT an owner unless it matches this number.
+    // Optional extra owner numbers. The connected WhatsApp account is also an owner.
     OWNER_NUMBER: process.env.OWNER_NUMBER || "",
-    OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || process.env.OWNER_NUMBER || "Not configured",
+    OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || process.env.OWNER_NUMBER || "",
     OWNER_NUMBERS: (process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || "").split(",").map(n => n.trim()).filter(Boolean),
 
-    PAIR_BASE_URL: process.env.PAIR_BASE_URL || "https://rizo-mini-bot-production-f128.up.railway.app",
     DEFAULT_COUNTRY_CODE: process.env.DEFAULT_COUNTRY_CODE || "92",
-    PREMIUM_REFERRALS: Number(process.env.PREMIUM_REFERRALS || 4),
     FORCE_CHANNEL_1: process.env.FORCE_CHANNEL_1 || "https://whatsapp.com/channel/0029VbDTOwyJpe8nSyLzrR44",
     FORCE_CHANNEL_2: process.env.FORCE_CHANNEL_2 || "",
-    BOT_NAME: "RIZO MD Mini",
-    BOT_FOOTER: "© ᴘᴏᴡᴇʀᴇᴅ ʙʏ RIZO-ᴍᴅ",
+    BOT_NAME: process.env.BOT_NAME || "RIZO Mini Bot",
+    BOT_FOOTER: process.env.BOT_FOOTER || `© Powered by ${process.env.BOT_NAME || "RIZO Mini Bot"}`,
     WORK_TYPE: process.env.WORK_TYPE || "public",
 
     // ===========================================================
@@ -67,7 +65,7 @@ module.exports = {
     // ===========================================================
     // 7. IMAGES & LIENS
     // ===========================================================
-    IMAGE_PATH: "https://files.catbox.moe/a622og.jpg",
+    IMAGE_PATH: process.env.IMAGE_PATH || "https://files.catbox.moe/a622og.jpg",
     CHANNEL_LINK: "https://whatsapp.com/channel/0029VbDTOwyJpe8nSyLzrR44",
 
     // ===========================================================
