@@ -2,9 +2,6 @@ const { cmd, commands } = require("../arslan");
 const moment = require("moment-timezone");
 const config = require("../config");
 
-const UPDATE_CHANNEL_JID = "120363412937151595@newsletter";
-const UPDATE_CHANNEL_NAME = "📢 RIZO-MD UPDATES";
-
 cmd({
     pattern: "menu",
     alias: ["commandlist", "allmenu", "help"],
@@ -34,49 +31,51 @@ cmd({
             fun: '🎮', general: '💎', group: '👥', islamic: '🕌',
             main: '⚡', menu: '📋', owner: '👑', premium: '💠',
             settings: '🔧', sticker: '🎨', system: '💻', tools: '🛠️',
-            music: '🎵', image: '🖼️', referrals: '🔗', misc: '📌',
+            music: '🎵', image: '🖼️', misc: '📌', emotions: '💛', love: '💞',
             search: '🔍', utility: '⚡', anime: '🎌'
         };
 
         const order = [
-            'premium', 'owner', 'admin', 'group', 'download', 'downloader',
-            'music', 'islamic', 'fun', 'anime', 'tools', 'image', 'sticker',
-            'settings', 'general', 'main', 'system', 'search', 'utility',
-            'misc', 'referrals'
+            'main', 'download', 'downloader', 'music', 'group', 'admin',
+            'owner', 'settings', 'general', 'search', 'tools', 'utility',
+            'islamic', 'anime', 'sticker', 'image', 'premium', 'system',
+            'games', 'fun', 'love', 'emotions', 'misc', 'adult'
         ];
 
         const time = moment().tz("Asia/Karachi").format("HH:mm:ss");
         const date = moment().tz("Asia/Karachi").format("dddd, MMMM Do YYYY");
-        const ownerDisplay = config.OWNER_DISPLAY_NUMBER || config.OWNER_NUMBER;
+        const quickPatterns = ['menu', 'alive', 'ping', 'song', 'igdl', 'fb', 'yts', 'weather', 'tts'];
+        const availablePatterns = new Set(commands.filter(c => c.pattern).map(c => c.pattern.toLowerCase()));
+        const quickCommands = quickPatterns.filter(pattern => availablePatterns.has(pattern));
+        const quickSet = new Set(quickCommands);
 
         let menuText = '';
 
         // Header
         menuText += `╭━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃  《 *${config.BOT_NAME || 'RIZO-MD'}* 》\n`;
+        menuText += `┃  《 *${config.BOT_NAME || 'RIZO Mini Bot'}* 》\n`;
         menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
         menuText += `┃ ✦ *Commands* : ${totalCommands}\n`;
         menuText += `┃ ✦ *Time*     : ${time}\n`;
         menuText += `┃ ✦ *Date*     : ${date}\n`;
-        menuText += `┃ ✦ *Owner*    : ${ownerDisplay}\n`;
+        menuText += `┃ ✦ *Owner*    : Private\n`;
         menuText += `┃ ✦ *Prefix*   : 『 ${config.PREFIX} 』\n`;
         menuText += `┃ ✦ *Mode*     : 〔 ${(config.WORK_TYPE || 'public').toUpperCase()} 〕\n`;
         menuText += `╰━━━━━━━━━━━━━━━━━⊷\n\n`;
 
-        // Premium
-        menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ 💠 *PREMIUM* 💠\n`;
-        menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ ✧ ${config.PREFIX}botscript\n`;
-        menuText += `┃ ✧ ${config.PREFIX}bugbotscript\n`;
-        menuText += `┃ ✧ ${config.PREFIX}promo\n`;
-        menuText += `┃ ✧ ${config.PREFIX}myref\n`;
-        menuText += `┗━━━━━━━━━━━━━━━━━⊷\n\n`;
+        if (quickCommands.length) {
+            menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
+            menuText += `┃ ⚡ *QUICK ACCESS*\n`;
+            menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
+            for (const command of quickCommands) menuText += `┃ ✧ ${config.PREFIX}${command}\n`;
+            menuText += `┗━━━━━━━━━━━━━━━━━⊷\n\n`;
+        }
 
         const renderCategory = (cat) => {
             if (!grouped[cat] || !grouped[cat].length) return '';
             const icon = icons[cat] || '📌';
-            const cmds = [...new Set(grouped[cat])].sort();
+            const cmds = [...new Set(grouped[cat])].filter(command => !quickSet.has(command)).sort();
+            if (!cmds.length) return '';
             let out = `┏━━━━━━━━━━━━━━━━━⊷\n`;
             out += `┃ ${icon} *${cat.toUpperCase()}*\n`;
             out += `┣━━━━━━━━━━━━━━━━━⊷\n`;
@@ -91,27 +90,16 @@ cmd({
         }
 
         menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ © ᴘᴏᴡᴇʀᴇᴅ ʙʏ *${config.BOT_NAME || 'RIZO-MD'}*\n`;
+        menuText += `┃ © ᴘᴏᴡᴇʀᴇᴅ ʙʏ *${config.BOT_NAME || 'RIZO Mini Bot'}*\n`;
         menuText += `┗━━━━━━━━━━━━━━━━━⊷`;
-
-        const contextInfo = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-                newsletterJid: UPDATE_CHANNEL_JID,
-                newsletterName: UPDATE_CHANNEL_NAME,
-                serverMessageId: 100
-            }
-        };
 
         try {
             await conn.sendMessage(from, {
                 image: { url: config.IMAGE_PATH },
-                caption: menuText,
-                contextInfo
+                caption: menuText
             }, { quoted: mek });
         } catch (imgErr) {
-            await conn.sendMessage(from, { text: menuText, contextInfo }, { quoted: mek });
+            await conn.sendMessage(from, { text: menuText }, { quoted: mek });
         }
     } catch (err) {
         console.error("AllMenu Error:", err);

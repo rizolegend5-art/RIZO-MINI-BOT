@@ -1,64 +1,23 @@
 const { cmd } = require('../arslan');
-const { sleep } = require('../lib/functions');
+const config = require('../config');
 
 cmd({
-  pattern: "ping",
-  desc: "Live ping speed monitor",
-  category: "main",
-  react: "👑",
+  pattern: 'ping',
+  desc: 'Check the bot response time',
+  category: 'main',
+  react: '👑',
   filename: __filename
 }, async (conn, mek, m, { from, reply }) => {
-
   try {
-
-    // start reaction
-    await conn.sendMessage(from, {
-      react: { text: "👑", key: m.key }
-    });
-
-    // initial message
-    const msg = await conn.sendMessage(from, {
-      text: "*TESTING....🤗*"
+    const sentAt = Number(mek.messageTimestamp) * 1000;
+    const latency = Number.isFinite(sentAt) && sentAt > 0
+      ? Math.max(0, Date.now() - sentAt)
+      : null;
+    return await conn.sendMessage(from, {
+      text: `⚡ *${config.BOT_NAME || 'RIZO Mini Bot'} PING*\n\n🏓 Response time: *${latency === null ? 'unavailable' : `${latency} ms`}*`
     }, { quoted: mek });
-
-    await sleep(1000);
-
-    // 🔁 live update loop (30 seconds)
-    for (let i = 0; i < 30; i++) {
-
-      const start = Date.now();
-
-      // tiny delay simulating ping check
-      await sleep(50);
-
-      const ping = Date.now() - start;
-
-      await conn.relayMessage(from, {
-        protocolMessage: {
-          key: msg.key,
-          type: 14,
-          editedMessage: {
-            conversation: `*👑 SPEED :❯ ${ping} 👑*`
-          }
-        }
-      }, {});
-
-      await sleep(1000);
-    }
-
-    // end reaction
-    await conn.sendMessage(from, {
-      react: { text: "😍", key: m.key }
-    });
-
   } catch (e) {
-
-    console.error("Ping Error:", e);
-
-    await conn.sendMessage(from, {
-      react: { text: "❌", key: m.key }
-    });
-
-    reply("*Ping failed — try again.*");
+    console.error('Ping Error:', e.code || 'request error');
+    return reply('*Ping failed — try again.*');
   }
 });

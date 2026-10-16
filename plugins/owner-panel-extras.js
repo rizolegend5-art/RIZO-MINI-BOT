@@ -3,10 +3,10 @@ const { isOwner, cleanNumber } = require('../lib/premium-check');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { Referral, ReferralCode, PromoPremium } = require('../lib/database');
+const { PromoPremium } = require('../lib/database');
 
 const ownerOnly = (ctx) => isOwner(ctx);
-const deny = (ctx) => ctx.reply('⛔ Owner only — configured main owner number required.');
+const deny = (ctx) => ctx.reply('⛔ Owner only — use the WhatsApp account paired to this bot.');
 
 cmd({ pattern: 'ownerhelp', alias: ['ownercommands', 'ohhelp'], desc: 'Owner: list owner panel commands', category: 'owner', react: '👑', filename: __filename }, async (conn, mek, m, ctx) => {
   if (!ownerOnly(ctx)) return deny(ctx);
@@ -14,7 +14,7 @@ cmd({ pattern: 'ownerhelp', alias: ['ownercommands', 'ohhelp'], desc: 'Owner: li
     '👑 *RIZO HELL-MD — OWNER COMMANDS*', '',
     '*Dashboard & health*', '• .ownerhub — dashboard', '• .bothealth — runtime health', '• .pluginscan — plugin file scan', '• .usagestats — command/category stats', '',
     '*Control*', '• .botpause / .botresume', '• .maintenance on/off', '• .botnotice <text|clear>', '• .setprefix !', '• .restart', '',
-    '*Referral & Premium*', '• .refcheck <number>', '• .refgrant <number> <days>', '• .refrevoke <number>', '• .refadd <referrer> <new-user>', '• .refremove <new-user>', '• .refreset <number> CONFIRM', '• .refleaderboard', '• .premiumlookup <number>', '',
+    '*Premium*', '• .promo <code> [maxUses] [expiresHours] [premiumDays]', '• .promolist', '• .delpromo <code>', '• .premiumlookup <number>', '',
     '*Messaging*', '• .sendto <number> <message>', '• .broadcast2 <message> (groups)', '• .forwardall (reply to a message)', '',
     '⚠️ Use broadcast tools only for appropriate chats and avoid unsolicited bulk messages.'
   ].join('\n'));
@@ -57,35 +57,19 @@ cmd({ pattern: 'pluginscan', alias: ['plugincheck'], desc: 'Owner: list plugin f
   } catch (e) { return ctx.reply(`❌ Plugin scan failed: ${e.message}`); }
 });
 
-cmd({ pattern: 'premiumlookup', alias: ['premcheck'], desc: 'Owner: check premium and referral totals', category: 'owner', react: '💎', use: '.premiumlookup <number>', filename: __filename }, async (conn, mek, m, ctx) => {
+cmd({ pattern: 'premiumlookup', alias: ['premcheck'], desc: 'Owner: check a user premium grant', category: 'owner', react: '💎', use: '.premiumlookup <number>', filename: __filename }, async (conn, mek, m, ctx) => {
   if (!ownerOnly(ctx)) return deny(ctx);
   const number = cleanNumber(ctx.q);
   if (!number || number.length < 10) return ctx.reply('Use: .premiumlookup 923XXXXXXXXX');
   try {
-    const [refs, code, manual] = await Promise.all([
-      Referral.countDocuments({ referrerNumber: number }),
-      ReferralCode.findOne({ number }).select('code').lean(),
-      PromoPremium.findOne({ number }).lean()
-    ]);
+    const manual = await PromoPremium.findOne({ number }).lean();
     const activeManual = Boolean(manual && (!manual.expiresAt || new Date(manual.expiresAt) > new Date()));
     return ctx.reply([
-      '💎 *PREMIUM USER LOOKUP*', '', `• Number: ${number}`, `• Referral code: ${code?.code || 'not generated'}`,
-      `• Verified referrals recorded: ${refs}`, `• Manual premium: ${activeManual ? 'ACTIVE' : 'INACTIVE'}`,
+      '💎 *PREMIUM USER LOOKUP*', '', `• Number: ${number}`,
+      `• Premium: ${activeManual ? 'ACTIVE' : 'INACTIVE'}`,
       `• Expiry: ${manual?.expiresAt ? new Date(manual.expiresAt).toLocaleString() : 'N/A'}`
     ].join('\n'));
   } catch (e) { return ctx.reply(`❌ Premium lookup failed: ${e.message}`); }
-});
-
-cmd({ pattern: 'refleaderboard', alias: ['reftopadmin', 'topreferrers'], desc: 'Owner: referral leaderboard', category: 'owner', react: '🏆', filename: __filename }, async (conn, mek, m, ctx) => {
-  if (!ownerOnly(ctx)) return deny(ctx);
-  try {
-    const rows = await Referral.aggregate([
-      { $group: { _id: '$referrerNumber', count: { $sum: 1 } } },
-      { $sort: { count: -1, _id: 1 } }, { $limit: 10 }
-    ]);
-    if (!rows.length) return ctx.reply('🏆 Abhi referral records nahi hain.');
-    return ctx.reply(['🏆 *TOP 10 REFERRERS*', '', ...rows.map((r, i) => `${i + 1}. +${r._id} — *${r.count}* verified referral${r.count === 1 ? '' : 's'}`)].join('\n'));
-  } catch (e) { return ctx.reply(`❌ Leaderboard failed: ${e.message}`); }
 });
 
 console.log('[RIZO] Extra owner panel commands loaded');

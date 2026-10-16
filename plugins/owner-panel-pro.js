@@ -61,7 +61,7 @@ cmd({
         '',
         '╭━━━━━━━━━━━━━━━━━⊷',
         '┃ *👤 OWNER*',
-        `┃ ├ Number: *${config.OWNER_DISPLAY_NUMBER}*`,
+        `┃ ├ Number: *${config.OWNER_DISPLAY_NUMBER || ctx.botNumber || 'Private'}*`,
         `┃ └ Total Owners: *${(config.OWNER_NUMBERS || []).length}*`,
         '╰━━━━━━━━━━━━━━━━━⊷'
     ].join('\n'));
@@ -247,7 +247,7 @@ cmd({
     desc: 'Owner: User ko ban karo',
     category: 'owner',
     react: '🚫',
-    use: '.userban 923154734548 <reason>',
+    use: '.userban 923XXXXXXXXX <reason>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!isOwner(ctx)) return ctx.reply('⛔ Owner only.');
@@ -256,7 +256,7 @@ cmd({
     const num = cleanNumber(parts.shift());
     const reason = parts.join(' ') || 'No reason';
 
-    if (!num) return ctx.reply('Use: `.userban 923154734548 <reason>`');
+    if (!num) return ctx.reply('Use: `.userban 923XXXXXXXXX <reason>`');
 
     bannedUsers.set(num, { reason, at: new Date() });
     return ctx.reply(`🚫 *+${num} banned.*\n\n📝 Reason: ${reason}`);
@@ -271,7 +271,7 @@ cmd({
     desc: 'Owner: User ko unban karo',
     category: 'owner',
     react: '✅',
-    use: '.userunban 923154734548',
+    use: '.userunban 923XXXXXXXXX',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!isOwner(ctx)) return ctx.reply('⛔ Owner only.');
@@ -499,7 +499,7 @@ cmd({
     desc: 'Owner: Kisi ko DM bhejo',
     category: 'owner',
     react: '📤',
-    use: '.sendto 923154734548 <message>',
+    use: '.sendto 923XXXXXXXXX <message>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!isOwner(ctx)) return ctx.reply('⛔ Owner only.');
@@ -508,7 +508,7 @@ cmd({
     const num = cleanNumber(parts.shift());
     const msg = parts.join(' ');
 
-    if (!num || !msg) return ctx.reply('Use: `.sendto 923154734548 <message>`');
+    if (!num || !msg) return ctx.reply('Use: `.sendto 923XXXXXXXXX <message>`');
 
     try {
         await conn.sendMessage(num + '@s.whatsapp.net', { text: msg });

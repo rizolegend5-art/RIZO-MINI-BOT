@@ -1,5 +1,4 @@
-const { cmd, commands } = require('../arslan');
-const config = require('../config');
+const { cmd } = require('../arslan');
 const os = require('os');
 
 // =================================================================
@@ -46,32 +45,3 @@ async(conn, mek, m, { from, reply, myquoted }) => {
 });
 
 
-// =================================================================
-// 👑 COMMANDE OWNER (Carte de visite)
-// =================================================================
-cmd({
-    pattern: "owner",
-    desc: "Contacter le créateur",
-    category: "general",
-    react: "👑"
-},
-async(conn, mek, m, { from, myquoted }) => {
-    const ownerNumber = String(config.OWNER_NUMBER || '').replace(/\D/g, '');
-    const ownerDisplay = config.OWNER_DISPLAY_NUMBER || `+${ownerNumber}`;
-    
-    // Création d'une vCard (Fiche contact)
-    const vcard = 'BEGIN:VCARD\n' +
-                  'VERSION:3.0\n' +
-                  'FN:RIZOMD (Owner)\n' +
-                  'ORG:RIZOMD Corp;\n' +
-                  `TEL;type=CELL;type=VOICE;waid=${ownerNumber}:+${ownerNumber}\n` +
-                  'END:VCARD';
-
-    await conn.sendMessage(from, { text: `👑 *Bot owner:* ${ownerDisplay}` }, { quoted: myquoted });
-    await conn.sendMessage(from, {
-        contacts: {
-            displayName: 'RIZO-MD',
-            contacts: [{ vcard }]
-        }
-    }, { quoted: myquoted });
-});

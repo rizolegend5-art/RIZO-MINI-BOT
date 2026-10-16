@@ -129,8 +129,8 @@ Every hour this channel operates, more innocent people become victims.
 
 Yours sincerely,
 
-Name: ${config.OWNER_DISPLAY_NUMBER || 'Concerned Citizen'}
-WhatsApp: +${config.OWNER_NUMBER}
+Name: [Your name]
+WhatsApp: [Your WhatsApp number]
 Date: ${new Date().toDateString()}
 Reference: CARDING-${Date.now().toString().slice(-8)}
 
@@ -196,8 +196,8 @@ DECLARATION
 This report is truthful. I am willing to cooperate with investigation.
 
 Yours sincerely,
-Name: ${config.OWNER_DISPLAY_NUMBER || 'Concerned Citizen'}
-WhatsApp: +${config.OWNER_NUMBER}
+Name: [Your name]
+WhatsApp: [Your WhatsApp number]
 Date: ${new Date().toDateString()}
 
 CC: FIA Cybercrime Pakistan`;

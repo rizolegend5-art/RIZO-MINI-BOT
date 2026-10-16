@@ -1,7 +1,7 @@
 const { cmd } = require('../arslan');
 const config = require('../config');
 
-// 🆕 Universal premium system (owner bypass + promo + referral)
+// Shared premium gate (paired/configured owner or active promo)
 const {
     requirePremium,
     isOwner,

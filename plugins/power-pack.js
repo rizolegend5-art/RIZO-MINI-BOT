@@ -13,7 +13,8 @@ function cleanNumber(value) {
 }
 
 function isOwner(ctx) {
-    return cleanNumber(ctx.senderNumber) === cleanNumber(config.OWNER_NUMBER);
+    return Boolean(ctx && (ctx.isOwner || ctx.isCreator || ctx.isMe)) ||
+        Boolean(cleanNumber(ctx?.senderNumber) && cleanNumber(ctx.senderNumber) === cleanNumber(config.OWNER_NUMBER));
 }
 
 function formatBytes(bytes) {
@@ -313,7 +314,7 @@ cmd({
         `💾 RAM: *${formatBytes(mem.rss)}*`,
         `🖥️ Platform: *${os.platform()} ${os.arch()}*`,
         `⚙️ Node: *${process.version}*`,
-        `👑 Owner: *${config.OWNER_DISPLAY_NUMBER || config.OWNER_NUMBER}*`
+        `👑 Owner contact: *Private*`
     ].join('\n'));
 });
 

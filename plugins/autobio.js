@@ -1,5 +1,6 @@
 const { cmd } = require('../arslan');
 const config = require('../config');
+let bioTimer = null;
 
 cmd({
   pattern: "autobio",
@@ -33,7 +34,11 @@ cmd({
     global.autoBio = state === "on";
 
     if (global.autoBio) {
+      if (bioTimer) clearTimeout(bioTimer);
       updateBio(conn);
+    } else if (bioTimer) {
+      clearTimeout(bioTimer);
+      bioTimer = null;
     }
 
     return reply(`*AUTO BIO AB ${state.toUpperCase()} HO GAYI HAI ☺️*`);
@@ -61,8 +66,12 @@ async function updateBio(conn) {
     console.log("❌ BIO UPDATE FAILED:", err.message);
   }
 
-  // ⏱️ 1 minute loop
-  setTimeout(() => updateBio(conn), 60 * 1000);
+  // Keep a single bounded updater, even if .autobio on is run repeatedly.
+  if (global.autoBio) {
+    if (bioTimer) clearTimeout(bioTimer);
+    bioTimer = setTimeout(() => updateBio(conn), 5 * 60 * 1000);
+    if (bioTimer.unref) bioTimer.unref();
+  }
 }
 
 

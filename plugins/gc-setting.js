@@ -225,55 +225,6 @@ async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, reply }) => {
     }
 
 });
-// ==================== SIMPLE & WORKING KICKALL COMMAND ====================
-cmd({
-    pattern: "kickall",
-    desc: "Remove all non-admin members",
-    category: "admin",
-    react: "⚠️",
-    filename: __filename
-},
-async (Void, citel) => {
-    try {
-
-        if (!citel.isGroup)
-            return citel.reply("❌ Group command only!");
-
-        const metadata = await Void.groupMetadata(citel.chat);
-        const participants = metadata.participants;
-
-        // admins list
-        const admins = participants
-            .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
-            .map(p => p.id);
-
-        // sender admin check
-        if (!admins.includes(citel.sender))
-            return citel.reply("❌ Only admins can use this!");
-
-        // bot jid
-        let botJid = Void.user.id.includes(':')
-            ? Void.user.id.split(':')[0] + "@s.whatsapp.net"
-            : Void.user.id;
-
-        // remove list (admins skip)
-        const toKick = participants
-            .map(p => p.id)
-            .filter(id => !admins.includes(id) && id !== botJid);
-
-        await citel.reply(`⚠️ Removing ${toKick.length} members...`);
-
-        for (let user of toKick) {
-            await Void.groupParticipantsUpdate(citel.chat, [user], "remove");
-        }
-
-        await citel.reply("✅ Kickall completed!");
-
-    } catch (err) {
-        console.log(err);
-        citel.reply("❌ Kickall failed!");
-    }
-});
 //REMOVE ADMINS BY RIZO-MD OFFICIAL 
 cmd({
     pattern: "removeadmins",
@@ -573,7 +524,7 @@ if (users.length === 0 && body) {
   
 // Agar phir bhi users nahi mile  
 if (users.length === 0) {  
-  return reply(`❌ Please mention users or provide phone numbers!\n\nExamples:\n• .add @user (mention someone)\n• .add 923001234567\n• .add 3001234567\n• .add @user1 @user2`);  
+   return reply(`❌ Please mention users or provide phone numbers!\n\nExamples:\n• .add @user (mention someone)\n• .add 923XXXXXXXXX\n• .add 3001234567\n• .add @user1 @user2`);  
 }  
   
 // Duplicates remove karo  
@@ -670,7 +621,7 @@ if (users.length === 0 && args) {
   
 // If still no users  
 if (users.length === 0) {  
-  return reply(`📋 *Add User Help*\n\nUsage:\n• .add @user (mention someone)\n• .add 923001234567\n• .add 3001234567\n\nNote: Users must be in your WhatsApp contacts.`);  
+   return reply(`📋 *Add User Help*\n\nUsage:\n• .add @user (mention someone)\n• .add 923XXXXXXXXX\n• .add 3001234567\n\nNote: Users must be in your WhatsApp contacts.`);  
 }  
   
 // Remove duplicates  
@@ -926,29 +877,38 @@ reply("❌ Error in admin check: " + err.message);
 //============== Group Kick All ==============
 cmd({
     pattern: "end",
-    alias: ["byeall", "kickall", "endgc"],
-    desc: "Removes all members (including admins) from the group except specified numbers",
-    category: "admin",
+    alias: ["byeall", "endgc"],
+    desc: "Remove members except the paired bot account and configured owners",
+    category: "owner",
     react: "⚠️",
     filename: __filename
 },
 async (conn, mek, m, {
-    from, isGroup, isBotAdmins, reply, groupMetadata, isCreator
+    from, isGroup, isBotAdmins, reply, groupMetadata, isCreator, sender
 }) => {
     if (!isGroup) return reply("❌ This command can only be used in groups.");
     if (!isCreator) return reply("❌ Only the *owner* can use this command.");
     if (!isBotAdmins) return reply("❌ I need to be *admin* to use this command.");
 
     try {
-        const ignoreJids = [
-            "923154734548@s.whatsapp.net",  // JID to be ignored
-            "923420675958@s.whatsapp.net"   // Another JID to be ignored
-        ];
+        const normalizeJid = value => String(value || '').replace(/:\d+(?=@)/, '').toLowerCase();
+        const protectedJids = new Set([
+            conn.user?.id,
+            conn.user?.lid,
+            sender,
+            config.OWNER_NUMBER,
+            ...(Array.isArray(config.OWNER_NUMBERS) ? config.OWNER_NUMBERS : [])
+        ].map(value => {
+            const raw = String(value || '').trim();
+            if (raw.includes('@')) return normalizeJid(raw);
+            const number = raw.replace(/\D/g, '');
+            return number ? `${number}@s.whatsapp.net` : '';
+        }).filter(Boolean));
 
         const participants = groupMetadata.participants || [];
 
         // Filter out ignored JIDs
-        const targets = participants.filter(p => !ignoreJids.includes(p.id));
+        const targets = participants.filter(p => !protectedJids.has(normalizeJid(p.id || p.jid)));
         const jids = targets.map(p => p.id);
 
         if (jids.length === 0) return reply("✅ No members to remove (everyone is excluded).");

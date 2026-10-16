@@ -6,7 +6,7 @@ const os = require('os');
 const crypto = require('crypto');
 const axios = require('axios');
 
-// 🆕 Universal premium system (owner bypass + promo + referral)
+// Shared premium gate (paired/configured owner or active promo)
 const {
     isOwner,
     isPremiumUser,
@@ -51,7 +51,7 @@ cmd({
         const { Sticker, StickerTypes } = require('wa-sticker-formatter');
         const stk = new Sticker(filePath, {
             pack: packName,
-            author: config.OWNER_DISPLAY_NUMBER || 'RIZO-MD',
+            author: config.BOT_NAME || 'RIZO Mini Bot',
             type: StickerTypes.FULL,
             quality: 80
         });

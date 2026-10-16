@@ -3,11 +3,12 @@ const config = require('../config');
 const axios = require('axios');
 
 const DL_API = 'https://api.qasimdev.dpdns.org/api/loaderto/download';
-const API_KEY = 'xbps-install-Syu';
+const API_KEY = process.env.ISLAMIC_DL_API_KEY || '';
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function downloadWithRetry(url, format = '360', retries = 3) {
+    if (!API_KEY) throw new Error('ISLAMIC_DL_API_KEY_NOT_CONFIGURED');
     for (let i = 0; i < retries; i++) {
         try {
             const { data } = await axios.get(DL_API, {
@@ -18,8 +19,8 @@ async function downloadWithRetry(url, format = '360', retries = 3) {
             throw new Error('No download URL');
         } catch (err) {
             if (i === retries - 1) throw err;
-            console.log(`Retry ${i + 1} failed, waiting 5s...`);
-            await wait(5000);
+            console.log(`Video downloader retry ${i + 1} failed; waiting briefly.`);
+            await wait(2000);
         }
     }
     throw new Error('All attempts failed');
@@ -180,8 +181,10 @@ cmd({
         }, { quoted: mek });
 
     } catch (err) {
-        console.error('[NAAT VIDEO] Error:', err.message);
-        await ctx.reply(`❌ Download fail: ${err.message}`);
+        console.error('[NAAT VIDEO] Download failed:', err.code || err.response?.status || 'request error');
+        await ctx.reply(err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED'
+            ? '❌ Video downloader is not configured on this deployment.'
+            : '❌ Video download service is temporarily unavailable. Try again later.');
     }
 });
 
@@ -245,8 +248,10 @@ cmd({
         }, { quoted: mek });
 
     } catch (err) {
-        console.error('[ISLAMIC VIDEO] Error:', err.message);
-        await ctx.reply(`❌ Download fail: ${err.message}`);
+        console.error('[ISLAMIC VIDEO] Download failed:', err.code || err.response?.status || 'request error');
+        await ctx.reply(err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED'
+            ? '❌ Video downloader is not configured on this deployment.'
+            : '❌ Video download service is temporarily unavailable. Try again later.');
     }
 });
 
@@ -284,7 +289,9 @@ cmd({
         }, { quoted: mek });
 
     } catch (err) {
-        console.error('[PROPHET VIDEO] Error:', err.message);
-        await ctx.reply(`❌ Download fail: ${err.message}`);
+        console.error('[PROPHET VIDEO] Download failed:', err.code || err.response?.status || 'request error');
+        await ctx.reply(err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED'
+            ? '❌ Video downloader is not configured on this deployment.'
+            : '❌ Video download service is temporarily unavailable. Try again later.');
     }
 });

@@ -227,13 +227,14 @@ cmd({
 cmd({
     pattern: 'kickall',
     alias: ['removeall'],
-    desc: 'Owner: Sab members kick karo',
-    category: 'owner',
+    desc: 'Group admin/owner: remove non-admin members',
+    category: 'group',
     react: '🚫',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!ctx.isGroup) return ctx.reply('❌ Group only.');
-    if (!ctx.isOwner) return ctx.reply('⛔ Owner only.');
+    if (!ctx.isAdmins && !ctx.isOwner) return ctx.reply('⛔ Group admins and owner only.');
+    if (!ctx.isBotAdmins) return ctx.reply('❌ Bot admin nahi hai.');
 
     const meta = await conn.groupMetadata(ctx.from);
     const members = meta.participants.filter(p => !p.admin && p.id !== ctx.botNumber2);

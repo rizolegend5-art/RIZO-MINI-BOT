@@ -549,13 +549,13 @@ cmd({
             'Use: `.unbanhard <number> | <name> | <country>`',
             '',
             '*Example:*',
-            '`.unbanhard 923154734548 | Ali Khan | Pakistan`',
+            '`.unbanhard 923XXXXXXXXX | Your name | Pakistan`',
             '',
             '*Options:*',
-            '`.unbanhard 923154734548 | Ali Khan | Pakistan legal`',
-            '`.unbanhard 923154734548 | Ali Khan | Pakistan business`',
-            '`.unbanhard 923154734548 | Ali Khan | Pakistan student`',
-            '`.unbanhard 923154734548 | Ali Khan | Pakistan family`',
+            '`.unbanhard 923XXXXXXXXX | Your name | Pakistan legal`',
+            '`.unbanhard 923XXXXXXXXX | Your name | Pakistan business`',
+            '`.unbanhard 923XXXXXXXXX | Your name | Pakistan student`',
+            '`.unbanhard 923XXXXXXXXX | Your name | Pakistan family`',
             '',
             '*Types:*',
             '• `legal` — Legal-style formal appeal (strongest)',
@@ -667,7 +667,7 @@ cmd({
 }, async (conn, mek, m, ctx) => {
     const number = (ctx.q || '').replace(/\D/g, '');
     if (number.length < 10) {
-        return ctx.reply('Use: `.unban 923154734548`\n\n💡 Full version: `.unbanhard <num> | <name> | <country> legal`');
+        return ctx.reply('Use: `.unban 923XXXXXXXXX`\n\n💡 Full version: `.unbanhard <num> | <name> | <country> legal`');
     }
 
     // Default: legal appeal

@@ -87,6 +87,7 @@ cmd({
 
     try {
         await conn.updateProfileName(name);
+        config.BOT_NAME = name;
         return ctx.reply(`✅ *Bot ka naam update ho gaya:* ${name}`);
     } catch (e) {
         return ctx.reply('❌ ' + e.message);
@@ -137,18 +138,17 @@ cmd({
     const [status] = await conn.fetchStatus(conn.user.id).catch(() => [{}]);
 
     const text = [
-        '🤖 *RIZO-MD BOT INFO*',
+        `🤖 *${config.BOT_NAME || 'RIZO Mini Bot'} BOT INFO*`,
         '',
         `📛 Name: *${config.BOT_NAME}*`,
-        `👑 Owner: *${config.OWNER_DISPLAY_NUMBER || config.OWNER_NUMBER}*`,
+        `👑 Owner: *Private*`,
         `🔧 Prefix: *${config.PREFIX}*`,
         `⚙️ Mode: *${config.WORK_TYPE || 'public'}*`,
-        `📱 Bot number: *+${conn.user.id.split(':')[0]}*`,
         `💬 About: *${status?.status || 'N/A'}*`,
         `🖼️ PP: *${pp ? 'Available' : 'Hidden'}*`,
         '',
         `📢 Channel: ${config.CHANNEL_LINK}`,
-        `© Powered by RIZO-MD`
+        `© Powered by ${config.BOT_NAME || 'RIZO Mini Bot'}`
     ].join('\n');
 
     if (pp) {

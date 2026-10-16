@@ -95,8 +95,8 @@ This scammer is a threat to other innocent WhatsApp users. Please act swiftly be
 
 Yours sincerely,
 
-${config.OWNER_DISPLAY_NUMBER || 'Reporter'}
-WhatsApp: +${config.OWNER_NUMBER}
+[Your name]
+WhatsApp: [Your WhatsApp number]
 Date: ${new Date().toDateString()}
 
 ═══════════════════════════════════════════
@@ -172,8 +172,8 @@ I declare this report to be true. I understand the legal consequences of false r
 I'm reporting this to protect others from the same pain I went through.
 
 Yours sincerely,
-${config.OWNER_DISPLAY_NUMBER || 'Reporter'}
-WhatsApp: +${config.OWNER_NUMBER}
+[Your name]
+WhatsApp: [Your WhatsApp number]
 
 CC: FIA Cybercrime Wing (Pakistan)
 CC: Federal Investigation Agency`;
@@ -225,8 +225,8 @@ REQUEST
 This impersonation has caused [damage type]. Please act fast.
 
 Yours,
-${config.OWNER_DISPLAY_NUMBER || 'Reporter'}
-WhatsApp: +${config.OWNER_NUMBER}
+[Your name]
+WhatsApp: [Your WhatsApp number]
 
 CC: FIA Cybercrime Wing`;
 
@@ -294,8 +294,8 @@ URGENT REQUEST
 I fear for my safety. Please act urgently.
 
 Yours,
-${config.OWNER_DISPLAY_NUMBER || 'Reporter'}
-WhatsApp: +${config.OWNER_NUMBER}
+[Your name]
+WhatsApp: [Your WhatsApp number]
 
 CC: FIA Cybercrime Wing (Emergency: 1991)
 CC: Local Police`;
@@ -458,8 +458,8 @@ REQUEST:
 I confirm this report is truthful. I understand false reporting has legal consequences.
 
 Yours,
-${config.OWNER_DISPLAY_NUMBER}
-WhatsApp: +${config.OWNER_NUMBER}`;
+[Your name]
+WhatsApp: [Your WhatsApp number]`;
 
     await ctx.reply(report);
 

@@ -24,15 +24,26 @@ function safeCalculate(expression) {
 }
 
 cmd({ pattern:'uptime', alias:['runtime','up'], desc:'Bot uptime check', category:'utility', react:'⏱️', filename:__filename }, async (conn, mek, m, ctx) => {
-  return ctx.reply(`⚡ *RIZO HELL-MD UPTIME*\n\n⏱️ ${duration(Date.now()-RIZO_STARTED_AT)}\n🟢 Process: Online`);
+  return ctx.reply(`⚡ *${config.BOT_NAME || 'RIZO Mini Bot'} UPTIME*\n\n⏱️ ${duration(Date.now()-RIZO_STARTED_AT)}\n🟢 Process: Online`);
 });
 cmd({ pattern:'botinfo', alias:['systeminfo','sysinfo'], desc:'Bot and host system info', category:'utility', react:'🖥️', filename:__filename }, async (conn, mek, m, ctx) => {
   const mem = process.memoryUsage();
-  return ctx.reply(`╭━━━〔 *RIZO SYSTEM* 〕━━━╮\n┃ 🤖 Name: RIZO HELL-MD\n┃ 📦 Node: ${process.version}\n┃ 🧠 RAM: ${(mem.rss/1024/1024).toFixed(1)} MB RSS\n┃ 💻 Platform: ${os.platform()} ${os.arch()}\n┃ ⚙️ CPUs: ${os.cpus().length}\n┃ ⏱️ Uptime: ${duration(process.uptime()*1000)}\n╰━━━━━━━━━━━━━━━━━━╯`);
+  return ctx.reply(`╭━━━〔 *${config.BOT_NAME || 'RIZO Mini Bot'} SYSTEM* 〕━━━╮\n┃ 🤖 Name: ${config.BOT_NAME || 'RIZO Mini Bot'}\n┃ 📦 Node: ${process.version}\n┃ 🧠 RAM: ${(mem.rss/1024/1024).toFixed(1)} MB RSS\n┃ 💻 Platform: ${os.platform()} ${os.arch()}\n┃ ⚙️ CPUs: ${os.cpus().length}\n┃ ⏱️ Uptime: ${duration(process.uptime()*1000)}\n╰━━━━━━━━━━━━━━━━━━╯`);
 });
-cmd({ pattern:'owner', alias:['creator','dev'], desc:'Show official bot owner contact', category:'main', react:'👑', filename:__filename }, async (conn, mek, m, ctx) => {
-  const number = String(config.OWNER_DISPLAY_NUMBER || '03154734548').replace(/\D/g,'');
-  return ctx.reply(`👑 *RIZO HELL-MD OWNER*\n\n🧑‍💻 Developer: RIZO HACKER\n📱 Contact: +${config.OWNER_NUMBER || '923154734548'}\n\n> Official owner contact only.`);
+cmd({ pattern:'owner', alias:['creator','dev'], desc:'Owner-only: show creator contact', category:'owner', react:'👑', filename:__filename }, async (conn, mek, m, ctx) => {
+  if (!(ctx.isOwner || ctx.isCreator || ctx.isMe)) return ctx.reply('⛔ Owner only.');
+  const number = String(config.OWNER_NUMBER || config.OWNER_DISPLAY_NUMBER || ctx.botNumber || ctx.senderNumber || '').replace(/\D/g, '');
+  if (!number) return ctx.reply('❌ Owner number is not available for this session.');
+  const target = ctx.sender || `${number}@s.whatsapp.net`;
+  const vcard = [
+    'BEGIN:VCARD', 'VERSION:3.0',
+    `FN:${config.BOT_NAME || 'Bot Owner'}`,
+    `TEL;type=CELL;type=VOICE;waid=${number}:+${number}`,
+    'END:VCARD'
+  ].join('\n');
+  return conn.sendMessage(target, {
+    contacts: { displayName: config.BOT_NAME || 'Bot Owner', contacts: [{ vcard }] }
+  });
 });
 cmd({ pattern:'groupinfo', alias:['ginfo'], desc:'Current group details', category:'group', react:'👥', filename:__filename }, async (conn, mek, m, ctx) => {
   if (!ctx.isGroup) return ctx.reply('❌ Yeh command group mein use karo.');
@@ -51,7 +62,7 @@ cmd({ pattern:'jid', alias:['chatid','myjid'], desc:'Show current chat and sende
 cmd({ pattern:'calc', alias:['calculate','math'], desc:'Safe basic calculator', category:'utility', react:'🧮', filename:__filename }, async (conn, mek, m, ctx) => {
   const result = safeCalculate(ctx.q || '');
   if (result === null) return ctx.reply('🧮 Use: .calc (25 + 5) * 2\nAllowed: numbers, + - * / % and brackets.');
-  return ctx.reply(`🧮 *RIZO CALCULATOR*\n\n${ctx.q} = *${result}*`);
+  return ctx.reply(`🧮 *${config.BOT_NAME || 'RIZO Mini Bot'} CALCULATOR*\n\n${ctx.q} = *${result}*`);
 });
 cmd({ pattern:'base64enc', alias:['b64enc'], desc:'Encode text to Base64', category:'utility', react:'🔐', filename:__filename }, async (conn, mek, m, ctx) => {
   const input=String(ctx.q||''); if(!input) return ctx.reply('Use: .base64enc your text');

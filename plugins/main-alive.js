@@ -1,6 +1,4 @@
 const { cmd, commands } = require('../arslan');
-const os = require("os");
-const { runtime } = require('../lib/functions');
 const config = require('../config');
 
 cmd({
@@ -11,7 +9,7 @@ cmd({
     react: "👑",
     filename: __filename
 },
-async (conn, mek, m, { from, sender, reply }) => {
+async (conn, mek, m, { from, reply }) => {
     try {
         const totalCmds = commands.length;
         const uptime = () => {
@@ -23,25 +21,18 @@ async (conn, mek, m, { from, sender, reply }) => {
         };
 
         const status = `
-        *I AM ALIVE NOW 🤗♥️*
+        *${config.BOT_NAME || 'RIZO Mini Bot'} is online 🤗♥️*
 *┏────〘 INFO 〙───⊷*
-*┃👑 MODE :❯ ${config.MODE || 'private'}*
-*┃👑 USER :❯ ${config.OWNER_NAME || 'RIZO-MD'}*
+*┃👑 MODE :❯ ${(config.WORK_TYPE || 'public').toUpperCase()}*
+*┃👑 OWNER :❯ Private*
 *┃👑 PREFIX :❯ ❮ ${config.PREFIX || '.'} ❯*
-*┃👑 VERSION :❯ 1.0.0*
+*┃👑 VERSION :❯ 2.4.0*
 *┃👑 TOTAL CMNDS :❯ ❮ ${totalCmds} ❯*
 *┃👑 UPTIME :❯ ${uptime()}*
 *┗──────────────⊷*
-*👑 RIZO-MD WHATSAPP BOT 👑*`;
+*👑 ${config.BOT_NAME || 'RIZO Mini Bot'} 👑*`;
 
-        await conn.sendMessage(from, { 
-            text: status,
-            contextInfo: {
-                mentionedJid: [sender],   // ✅ FIXED
-                forwardingScore: 999,
-                isForwarded: true
-            }
-        }, { quoted: mek });
+        await conn.sendMessage(from, { text: status }, { quoted: mek });
 
     } catch (e) {
         console.error("Error in alive command:", e);

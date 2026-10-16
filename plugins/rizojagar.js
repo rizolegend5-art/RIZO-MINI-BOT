@@ -1,6 +1,6 @@
 // plugins/rizojagar.js
-// RIZOJAGAR — Gangster Edition with hard dialogues
-// MUJEEB ✖ RIZO — Enemies vanish from WhatsApp
+// RIZOJAGAR — Gangster Edition (FIXED)
+// Image alag, dialogues alag messages mein
 
 const { cmd } = require('../arslan');
 
@@ -34,17 +34,10 @@ const G = {
         const s = 'ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘQʀꜱᴛᴜᴠᴡxʏᴢ';
         const i = m.indexOf(c);
         return i >= 0 ? s[i] : c;
-    }).join(''),
-
-    circle: (t) => t.split('').map(c => {
-        const m = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-        const s = 'ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀⓁⓂⓃⓄⓅⓆⓇⓈⓉⓊⓋⓌⓍⓎⓏⓐⓑⓒⓓⓔⓕⓖⓗⓘⓙⓚⓛⓜⓝⓞⓟⓠⓡⓢⓣⓤⓥⓦⓧⓨⓩ';
-        const i = m.indexOf(c);
-        return i >= 0 ? s[i] : c;
     }).join('')
 };
 
-// ═══ GANGSTER SYMBOLS ═══
+// ═══ SYMBOLS ═══
 const SKULL = '☠️';
 const FIRE = '🔥';
 const BLOOD = '🩸';
@@ -67,9 +60,9 @@ cmd({
 }, async (conn, mek, m, { from, pushname }) => {
     try {
         // ═══════════════════════════════════════════
-        //  IMAGE + INTRO
+        //  1. IMAGE (with short caption only)
         // ═══════════════════════════════════════════
-        const introMsg = await conn.sendMessage(from, {
+        await conn.sendMessage(from, {
             image: { url: 'https://files.catbox.moe/qsauhy.jpg' },
             caption:
 `${CROWN} ${G.double('GANGSTER MODE')} ${CROWN}
@@ -79,10 +72,10 @@ ${G.bold('MUJEEB')}  ✖  ${G.bold('RIZO')}
 ${G.small('two brothers. one soul. zero mercy.')}`
         }, { quoted: mek });
 
-        await sleep(5000);
+        await sleep(4000);
 
         // ═══════════════════════════════════════════
-        //  STAGE 1 — OPENING WARNING
+        //  2. WARNING MESSAGE
         // ═══════════════════════════════════════════
         await conn.sendMessage(from, {
             text:
@@ -97,16 +90,16 @@ ${G.script('Ek baar soch le...')}
 
 ${LINE_BLOOD}
 
-${G.italic('Kyunki jo main kehne wala hoon...')}
-${G.italic('Woh teri zindagi badal dega...')}
+${G.script('Kyunki jo main kehne wala hoon...')}
+${G.script('Woh teri zindagi badal dega...')}
 
 ${LINE_BLOOD}
 
 ${G.bold('MUJEEB')} ${G.small('aur')} ${G.bold('RIZO')}
 ${G.small('ke baare mein...')}
 
-${G.italic('Har jagah baat hoti hai...')}
-${G.italic('Har jagah naam chalta hai...')}
+${G.script('Har jagah baat hoti hai...')}
+${G.script('Har jagah naam chalta hai...')}
 
 ${LINE_BLOOD}
 
@@ -114,14 +107,13 @@ ${G.small('Aur tu...')}
 ${G.small('Tu sirf ek kissay mein aayega...')}
 ${G.small('Zameen ke neeche...')}
 
-${SKULL}━━━━━━━━━━━━━━━━━━━━━━━━━━━${SKULL}`,
-            edit: introMsg.key
-        });
+${SKULL}━━━━━━━━━━━━━━━━━━━━━━━━━━━${SKULL}`
+        }, { quoted: mek });
 
         await sleep(5000);
 
         // ═══════════════════════════════════════════
-        //  STAGE 2 — PANGA WARNING
+        //  3. PANGA WARNING
         // ═══════════════════════════════════════════
         await conn.sendMessage(from, {
             text:
@@ -145,10 +137,10 @@ ${G.bold('GAYAB HO JAOGE...')}
 
 ${LINE_BLOOD}
 
-${G.italic('Na naam rahega...')}
-${G.italic('Na nishaan rahega...')}
-${G.italic('Na teri chat history rahegi...')}
-${G.italic('Na tera account rahega...')}
+${G.script('Na naam rahega...')}
+${G.script('Na nishaan rahega...')}
+${G.script('Na teri chat history rahegi...')}
+${G.script('Na tera account rahega...')}
 
 ${LINE_BLOOD}
 
@@ -163,14 +155,13 @@ ${G.small('Family ko bolna...')}
 ${G.small('Tera phone band hone wala hai...')}
 ${G.small('Hamesha ke liye...')}
 
-${GUN}━━━━━━━━━━━━━━━━━━━━━━━━━━━${GUN}`,
-            edit: introMsg.key
-        });
+${GUN}━━━━━━━━━━━━━━━━━━━━━━━━━━━${GUN}`
+        }, { quoted: mek });
 
-        await sleep(5500);
+        await sleep(5000);
 
         // ═══════════════════════════════════════════
-        //  STAGE 3 — GANGSTER DIALOGUES
+        //  4. GANGSTER DIALOGUES
         // ═══════════════════════════════════════════
         await conn.sendMessage(from, {
             text:
@@ -211,20 +202,17 @@ ${LINE_BLOOD}
 ${BLOOD} ${G.bold('"Teri maa ko bolna...')}
 ${G.bold('beta ab WhatsApp pe nahi milega."')}
 
-${SKULL}━━━━━━━━━━━━━━━━━━━━━━━━━━━${SKULL}`,
-            edit: introMsg.key
-        });
+${SKULL}━━━━━━━━━━━━━━━━━━━━━━━━━━━${SKULL}`
+        }, { quoted: mek });
 
-        await sleep(6000);
+        await sleep(5500);
 
         // ═══════════════════════════════════════════
-        //  STAGE 4 — FINAL BLOW
+        //  5. FINAL NOTICE
         // ═══════════════════════════════════════════
         await conn.sendMessage(from, {
             text:
 `${SKULL}━━━━━━━━━━━━━━━━━━━━━━━━━━━${SKULL}
-
-${SKULL}━━━━━━━━━━━━━━━━━━━━━━━━━━━${SKULL}
 
 ${G.double('FINAL NOTICE')}
 
@@ -240,14 +228,14 @@ ${G.script('Samajh lo kehna kya chahta hoon...')}
 ${LINE_BLOOD}
 
 ${G.bold('MUJEEB')} ${G.small('ke saamne aaya...')}
-${G.italic('Toh teri')} ${G.bold('MAA')} ${G.italic('ka')}
-${G.bold('SUHAAG')} ${G.italic('khatam...')}
+${G.script('Toh teri')} ${G.bold('MAA')} ${G.script('ka')}
+${G.bold('SUHAAG')} ${G.script('khatam...')}
 
 ${LINE_BLOOD}
 
 ${G.bold('RIZO')} ${G.small('ke saamne aaya...')}
-${G.italic('Toh teri')} ${G.bold('BEHEN')} ${G.italic('ki')}
-${G.bold('IZZAT')} ${G.italic('khatam...')}
+${G.script('Toh teri')} ${G.bold('BEHEN')} ${G.script('ki')}
+${G.bold('IZZAT')} ${G.script('khatam...')}
 
 ${LINE_BLOOD}
 
@@ -276,13 +264,12 @@ ${SKULL}━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${CROWN} ${G.bold('MUJEEB')}  ✖  ${G.bold('RIZO')} ${CROWN}
 
-${G.italic('Family first. Haters gone. Forever.')}
+${G.script('Family first. Haters gone. Forever.')}
 
 ${SKULL}━━━━━━━━━━━━━━━━━━━━━━━━━━━${SKULL}
 
-${BLOOD} ${G.small('© RIZO GANG — The Untouchables')} ${BLOOD}`,
-            edit: introMsg.key
-        });
+${BLOOD} ${G.small('© RIZO GANG — The Untouchables')} ${BLOOD}`
+        }, { quoted: mek });
 
         // Final gunfire reactions
         const reactions = ['🔫', '☠️', '🩸', '🔥', '👑', '💀', '🔫', '☠️'];
@@ -290,7 +277,7 @@ ${BLOOD} ${G.small('© RIZO GANG — The Untouchables')} ${BLOOD}`,
             await conn.sendMessage(from, {
                 react: { text: r, key: mek.key }
             }).catch(() => {});
-            await sleep(500);
+            await sleep(400);
         }
 
     } catch (err) {
@@ -333,9 +320,9 @@ ${G.script('GAYAB HO JAOGE..."')}
 
 ${LINE_BLOOD}
 
-${G.italic('Na naam rahega...')}
-${G.italic('Na nishaan rahega...')}
-${G.italic('Na tera account rahega...')}
+${G.script('Na naam rahega...')}
+${G.script('Na nishaan rahega...')}
+${G.script('Na tera account rahega...')}
 
 ${LINE_BLOOD}
 
@@ -357,4 +344,4 @@ ${BLOOD} — ${G.bold(user)} ${BLOOD}`;
     return conn.sendMessage(from, { text: message }, { quoted: mek });
 });
 
-console.log('[RIZO HELL-MD] RIZOJAGAR gangster loaded 🔫');
+console.log('[RIZO HELL-MD] RIZOJAGAR gangster FIXED loaded 🔫');

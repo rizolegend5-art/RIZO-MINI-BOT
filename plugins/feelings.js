@@ -202,6 +202,9 @@ cmd({
 🎬 *EXTRA (3):*
 .cringe .bonk .shoot
 
+💛 *SUPPORT:*
+.mood <happy|sad|angry|tired|lonely|grateful> .comfort .affirmation
+
 💡 Har command apna exact emotion GIF bhejta hai
 🎬 Powered by Nekos.best + waifu.pics`
     );
@@ -275,4 +278,60 @@ cmd({
     }
 });
 
-console.log('[RIZO HELL-MD] 40+ emotion commands loaded');
+const pick = items => items[Math.floor(Math.random() * items.length)];
+const moodReplies = {
+    happy: ['😄 Nice—enjoy the good moment, you earned it.', '✨ Hold onto this feeling; little wins count too.'],
+    sad: ['🫂 You do not have to solve everything right now. Take one small step and give yourself some room.', '💙 It is okay to have a rough day. You deserve patience, including from yourself.'],
+    angry: ['🌿 Pause for a breath before replying. You can choose what deserves your energy.', '🧊 Step away for a minute if you can; a little space can help.'],
+    tired: ['😴 Rest is productive too. Take a break and come back when you have a little more energy.', '☕ One thing at a time. You do not need to finish everything this minute.'],
+    lonely: ['🫂 You matter, even when it feels quiet. Consider messaging someone you trust.', '💛 A small hello to someone safe can make the day feel less heavy.'],
+    grateful: ['🌼 Take a second to notice what is going right—you can appreciate it without pretending everything is perfect.', '✨ Keep that good feeling close, and share it with someone if you can.']
+};
+const comforts = [
+    '🫂 You do not need to have all the answers today. Breathe, take the next small step, and be kind to yourself.',
+    '💙 A difficult moment is not your whole story. You deserve care and a little time to reset.',
+    '🌿 Pause, unclench your shoulders, and take one slow breath. You can handle the next step when you are ready.'
+];
+const affirmations = [
+    '🌱 I can take things one step at a time.',
+    '💛 My feelings are real, and I can treat myself with patience.',
+    '✨ I am allowed to rest and still be making progress.',
+    '🌿 I do not need to be perfect to be worthy of respect.'
+];
+
+cmd({
+    pattern: 'mood',
+    alias: ['moodcheck'],
+    desc: 'Get a gentle response for your current mood',
+    category: 'emotions',
+    react: '💛',
+    use: '.mood happy|sad|angry|tired|lonely|grateful',
+    filename: __filename
+}, async (conn, mek, m, ctx) => {
+    const mood = (ctx.q || '').trim().toLowerCase();
+    if (mood && !moodReplies[mood]) {
+        return ctx.reply(`💛 Choose one: ${Object.keys(moodReplies).join(', ')}\nExample: .mood tired`);
+    }
+    const chosen = mood || pick(Object.keys(moodReplies));
+    return ctx.reply(`💛 *${chosen.toUpperCase()}*\n${pick(moodReplies[chosen])}`);
+});
+
+cmd({
+    pattern: 'comfort',
+    alias: ['tasalli', 'comfortme'],
+    desc: 'Send a supportive, calming message',
+    category: 'emotions',
+    react: '🫂',
+    filename: __filename
+}, async (conn, mek, m, ctx) => ctx.reply(pick(comforts)));
+
+cmd({
+    pattern: 'affirmation',
+    alias: ['positive', 'selftalk'],
+    desc: 'Get a kind affirmation',
+    category: 'emotions',
+    react: '🌱',
+    filename: __filename
+}, async (conn, mek, m, ctx) => ctx.reply(pick(affirmations)));
+
+console.log('[RIZO Mini Bot] emotion commands loaded');

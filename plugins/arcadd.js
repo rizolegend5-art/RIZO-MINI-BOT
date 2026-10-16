@@ -2,48 +2,7 @@
 
 const { cmd } = require('../arslan');
 const config = require('../config');
-const fs = require('fs');
-const path = require('path');
-
-const REF_FILE = path.join(__dirname, '..', 'referrals.json');
-
-function loadRefs() {
-    if (!fs.existsSync(REF_FILE)) return { codes: {}, counts: {}, byCode: {} };
-    try {
-        const d = JSON.parse(fs.readFileSync(REF_FILE, 'utf-8'));
-        return { codes: d.codes || {}, counts: d.counts || {}, byCode: d.byCode || {} };
-    } catch { return { codes: {}, counts: {}, byCode: {} }; }
-}
-
-function cleanNumber(v) {
-    if (!v) return '';
-    let n = String(v).replace(/[^0-9]/g, '');
-    if (n.startsWith('0')) n = '92' + n.slice(1);
-    if (n.length === 10 && n.startsWith('3')) n = '92' + n;
-    return n;
-}
-
-// owner check — config se
-function isOwner(ctx) {
-    if (ctx.isOwner || ctx.isCreator) return true;
-    const num = cleanNumber(ctx.senderNumber || ctx.sender);
-    const owners = [
-        ...(Array.isArray(config.OWNER_NUMBERS) ? config.OWNER_NUMBERS : []),
-        config.OWNER_NUMBER
-    ].map(cleanNumber).filter(Boolean);
-    return owners.includes(num);
-}
-
-// premium check — config + JSON referrals
-function isPremium(ctx) {
-    if (isOwner(ctx)) return true;
-    const num = cleanNumber(ctx.senderNumber || ctx.sender);
-    if (!num) return false;
-    const d = loadRefs();
-    const count = d.counts[num] || 0;
-    const threshold = Math.max(1, Number(config.PREMIUM_REFERRALS) || 4);
-    return count >= threshold;
-}
+const { isPremiumUser } = require('../lib/premium-check');
 
 const DEFAULT_REACTION_EMOJI = '❤️';
 
@@ -71,16 +30,8 @@ cmd({
     use: '.arcadd <channel-post-link> ❤️ 🔥',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!isPremium(ctx)) {
-        const num = cleanNumber(ctx.senderNumber || ctx.sender);
-        const d = loadRefs();
-        const count = d.counts[num] || 0;
-        const threshold = Math.max(1, Number(config.PREMIUM_REFERRALS) || 4);
-        return ctx.reply(
-            `🔒 *Premium command*\n\n` +
-            `Aapke *${count}/${threshold}* referrals hain.\n\n` +
-            `Apna referral link lo: *${config.PREFIX}myref*`
-        );
+    if (!await isPremiumUser(ctx)) {
+        return ctx.reply(`🔒 Premium command. Owner se promo code le kar \`${config.PREFIX}redeem <code>\` use karein.`);
     }
 
     const q = (ctx.q || '').trim();

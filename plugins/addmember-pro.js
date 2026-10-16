@@ -191,7 +191,7 @@ cmd({
     desc: 'Admin: Number add with validation',
     category: 'group',
     react: '🔍',
-    use: '.addmember3 03154734548',
+    use: '.addmember3 03XXXXXXXXX',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!ctx.isGroup) return ctx.reply('❌ Group only.');
@@ -209,9 +209,9 @@ cmd({
         return ctx.reply(
             '❌ Invalid number format.\n\n' +
             '✅ *Sahi formats:*\n' +
-            '• `923154734548` (international)\n' +
-            '• `03154734548` (local → auto convert)\n' +
-            '• `+92 315 4734548`'
+            '• `923XXXXXXXXX` (international)\n' +
+            '• `03XXXXXXXXX` (local → auto convert)\n' +
+            '• `+92 3XX XXX XXXX`'
         );
     }
 
@@ -261,14 +261,14 @@ cmd({
     desc: 'Check karo number WhatsApp pe exist karta hai ya nahi',
     category: 'tools',
     react: '🔍',
-    use: '.checknum 923154734548',
+    use: '.checknum 923XXXXXXXXX',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     let number = (ctx.q || '').replace(/\D/g, '');
     if (number.startsWith('0')) number = `${config.DEFAULT_COUNTRY_CODE}${number.slice(1)}`;
 
     if (!number || number.length < 10) {
-        return ctx.reply('Use: `.checknum 923154734548`');
+        return ctx.reply('Use: `.checknum 923XXXXXXXXX`');
     }
 
     try {

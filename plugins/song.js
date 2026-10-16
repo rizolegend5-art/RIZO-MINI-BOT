@@ -2,12 +2,13 @@
 // RIZO HELL-MD — Song download with working 2026 APIs
 
 const { cmd } = require('../arslan');
+const config = require('../config');
 const axios = require('axios');
 const yts = require('yt-search');
 
 const CONFIG = {
-    apiTimeout: 20000,
-    downloadTimeout: 120000,
+    apiTimeout: 12000,
+    downloadTimeout: 60000,
     maxAudioSize: 100 * 1024 * 1024,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 };
@@ -108,12 +109,12 @@ async function getAudioUrl(youtubeUrl) {
                     if (final) return { download: final, title: result.title };
                     continue;
                 }
-                console.log(`[RIZO MUSIC] ✅ ${api.name} → ${result.download.slice(0, 60)}...`);
+            console.log(`[RIZO MUSIC] ✅ ${api.name} returned an audio link.`);
                 return result;
             }
             console.warn(`[RIZO MUSIC] ${api.name}: no download field`);
         } catch (err) {
-            console.warn(`[RIZO MUSIC] ${api.name}: ${err.message}`);
+            console.warn(`[RIZO MUSIC] ${api.name} failed (${err.code || err.response?.status || 'request error'}).`);
         }
     }
 
@@ -124,9 +125,9 @@ async function getAudioUrl(youtubeUrl) {
 //  LOADER.TO — secondary fetch for real URL
 // ═══════════════════════════════════════════
 async function resolveLoaderTo(id) {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 10; i++) {
         try {
-            await sleep(1500);
+            await sleep(1000);
             const r = await axios.get(`https://loader.to/ajax/progress.php?id=${id}`, { timeout: 10000 });
             const d = r.data;
             if (d?.download_url) return d.download_url;
@@ -175,7 +176,7 @@ async function downloadAudioBuffer(audioUrl) {
             return buf;
         } catch (err) {
             lastError = err;
-            console.error(`[RIZO MUSIC] Download attempt ${attempt}: ${err.message}`);
+            console.error(`[RIZO MUSIC] Download attempt ${attempt} failed (${err.code || err.response?.status || 'request error'}).`);
             if (attempt < 3) await sleep(1500);
         }
     }
@@ -209,7 +210,7 @@ cmd({
 }, async (conn, mek, m, ctx) => {
     const query = (ctx.q || '').trim();
     if (!query) {
-        return ctx.reply('🎵 *RIZO HELL-MD MUSIC*\n\nUse: .play song name\nExample: .play Pal Pal Afusic');
+        return ctx.reply(`🎵 *${config.BOT_NAME || 'RIZO Mini Bot'} MUSIC*\n\nUse: .play song name\nExample: .play a song title`);
     }
 
     await conn.sendMessage(ctx.from, { react: { text: '⏳', key: mek.key } });
@@ -217,9 +218,26 @@ cmd({
     try {
         const video = await searchSong(query);
 
-        await conn.sendMessage(ctx.from, {
-            text: `🎵 *RIZO HELL-MD*\n\n📌 ${video.title}\n🎤 ${video.author?.name || 'Unknown'}\n⏱️ ${video.timestamp || 'Unknown'}\n\n⬇️ Preparing audio...`
-        }, { quoted: mek });
+        const songCaption =
+            `🎵 *${config.BOT_NAME || 'RIZO Mini Bot'}*\n\n` +
+            `📌 ${video.title}\n` +
+            `🎤 ${video.author?.name || 'Unknown'}\n` +
+            `⏱️ ${video.timestamp || 'Unknown'}\n\n` +
+            `⬇️ Preparing audio…`;
+        const thumbnail = video.thumbnail || video.image || video.thumbnails?.[0]?.url;
+        if (thumbnail) {
+            try {
+                await conn.sendMessage(ctx.from, {
+                    image: { url: thumbnail },
+                    caption: songCaption
+                }, { quoted: mek });
+            } catch (thumbnailError) {
+                console.warn('[RIZO MUSIC] Thumbnail send failed:', thumbnailError.message);
+                await conn.sendMessage(ctx.from, { text: songCaption }, { quoted: mek });
+            }
+        } else {
+            await conn.sendMessage(ctx.from, { text: songCaption }, { quoted: mek });
+        }
 
         const audioData = await getAudioUrl(video.url);
         const buffer = await downloadAudioBuffer(audioData.download);
@@ -236,7 +254,7 @@ cmd({
 
         await conn.sendMessage(ctx.from, { react: { text: '✅', key: mek.key } });
     } catch (error) {
-        console.error('[RIZO SONG ERROR]', error);
+        console.error('[RIZO SONG ERROR]', error.code || error.response?.status || error.message || 'Unknown error');
         await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
 
         if (error.message === 'NO_RESULT') return ctx.reply('❌ Song nahi mila. Dusra naam try karo.');
@@ -249,8 +267,8 @@ cmd({
                 '• Bot restart karo (APIs refresh hote hain)'
             );
         }
-        return ctx.reply(`❌ *Audio fail*: ${error.message.slice(0, 100)}`);
+        return ctx.reply('❌ Audio could not be downloaded right now. Please try again later.');
     }
 });
 
-console.log('[RIZO HELL-MD] Song command loaded (2026 APIs)');
+console.log('[RIZO Mini Bot] Song command loaded');
