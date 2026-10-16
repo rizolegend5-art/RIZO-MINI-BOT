@@ -1,3 +1,6 @@
+// main.js
+// RIZO-MD — Updated with anti-spam + loop guards
+
 const {
     default: makeWASocket,
     useMultiFileAuthState,
@@ -46,6 +49,12 @@ const prefix = config.PREFIX;
 const mode = config.MODE || config.WORK_TYPE;
 const router = express.Router();
 
+// ═══════════════════════════════════════════
+//  🛑 GLOBAL ANTI-SPAM STATE
+// ═══════════════════════════════════════════
+if (!global.__processedMsgIds) global.__processedMsgIds = new Map();
+if (!global.__greetedNumbers) global.__greetedNumbers = new Set();
+
 // Bounded in-memory panel log buffer; never store credentials or message contents.
 const panelLogs = [];
 const PANEL_LOG_LIMIT = 300;
@@ -85,13 +94,10 @@ const OWNER_NUMBERS = [...new Set([
 
 function normalizeOwnerNumber(value) {
     let raw = String(value || '').trim();
-    // JIDs can include device suffixes or server names; only compare the user part.
     if (raw.includes('@')) raw = raw.split('@')[0];
     if (raw.includes(':')) raw = raw.split(':')[0];
     let number = raw.replace(/\D/g, '');
     if (number.startsWith('00')) number = number.slice(2);
-    // Common mistake: "+92" prefix pasted on top of a number that still has its
-    // local leading 0 (e.g. "+920315xxxxxxx" instead of "+923154734548").
     if (number.startsWith('920') && number.length === 13) number = '92' + number.slice(3);
     if (number.startsWith('0')) number = '92' + number.slice(1);
     if (number.length === 10 && number.startsWith('3')) number = '92' + number;
@@ -113,12 +119,10 @@ function sameParticipant(a, b) {
     const aa = normalizeParticipantJid(a), bb = normalizeParticipantJid(b);
     if (!aa || !bb) return false;
     if (aa === bb) return true;
-    // Baileys multi-device may represent the same person as @lid and @s.whatsapp.net.
     return normalizeOwnerNumber(aa) === normalizeOwnerNumber(bb) &&
         Boolean(normalizeOwnerNumber(aa));
 }
 
-// Extract command text from normal, caption, ephemeral, view-once and interactive messages.
 function unwrapMessageContent(message) {
     let current = message;
     for (let i = 0; i < 5 && current; i++) {
@@ -154,16 +158,13 @@ function extractTextBody(message) {
 connectdb();
 
 const activeSockets = new Map();
-// ===========================================================
-// 🆕 GLOBAL EXPOSE
-// ===========================================================
 global.activeSockets = activeSockets;
 
 const socketCreationTime = new Map();
 const autoFollowedChannels = new Set();
 
 // ===========================================================
-// 🆕 AUTO-FOLLOW (Links + IDs)
+// AUTO-FOLLOW
 // ===========================================================
 function newsletterInviteCode(value) {
     try {
@@ -171,9 +172,7 @@ function newsletterInviteCode(value) {
         if (url.protocol !== 'https:' || !/^(www\.)?whatsapp\.com$/i.test(url.hostname)) return null;
         const parts = url.pathname.split('/').filter(Boolean);
         return parts[0] === 'channel' && /^[A-Za-z0-9_-]{5,100}$/.test(parts[1] || '') ? parts[1] : null;
-    } catch (_) {
-        return null;
-    }
+    } catch (_) { return null; }
 }
 
 async function autoFollowConfiguredChannels(socket, number) {
@@ -253,7 +252,6 @@ const getGroupAdmins = (participants) => {
     const admins = [];
     for (const participant of (participants || [])) {
         if (participant.admin == null) continue;
-        // Keep every known identifier; Baileys v7 can expose LID and phone JIDs.
         for (const jid of [participant.id, participant.jid, participant.phoneNumber, participant.lid]) {
             if (jid && !admins.includes(jid)) admins.push(jid);
         }
@@ -324,14 +322,26 @@ async function setupCallHandlers(socket, number) {
     });
 }
 
+// ═══════════════════════════════════════════
+//  🛑 AUTO RESTART WITH THROTTLE
+// ═══════════════════════════════════════════
 function setupAutoRestart(socket, number) {
     const maxRestartAttempts = 3;
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
+    let lastReconnectAt = 0;
 
     socket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'open') { restartCounts.set(sanitizedNumber, 0); }
         if (connection !== 'close') return;
+
+        // 🛑 Throttle — 30 seconds ke andar reconnect mat karo
+        const now = Date.now();
+        if (now - lastReconnectAt < 30000) {
+            arslanLog(`Reconnect throttled for ${number}`, 'warning');
+            return;
+        }
+        lastReconnectAt = now;
 
         const statusCode = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode;
         const errorMessage = lastDisconnect && lastDisconnect.error && lastDisconnect.error.message;
@@ -437,7 +447,8 @@ async function arslanPair(number, res = null) {
             connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 0,
             keepAliveIntervalMs: 10000,
-            emitOwnEvents: true,
+            // 🛑 ANTI-SPAM: false — bot apne messages ko dobara process nahi karega
+            emitOwnEvents: false,
             fireInitQueries: true,
             generateHighQualityLinkPreview: true,
             syncFullHistory: false,
@@ -465,9 +476,6 @@ async function arslanPair(number, res = null) {
             return jid;
         };
 
-        // ===========================================================
-        // 🆕 Media download — file-type v16/v21 BOTH compatible
-        // ===========================================================
         conn.downloadAndSaveMediaMessage = async (message, filename, attachExtension = true) => {
             const quoted = message.msg ? message.msg : message;
             const mime = (message.msg || message).mimetype || '';
@@ -476,11 +484,9 @@ async function arslanPair(number, res = null) {
             let buffer = Buffer.from([]);
             for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
 
-            // 🆕 file-type handle — v16 aur v21 dono support
             let ext = 'bin';
             try {
                 let ft = FileType;
-                // file-type v21+ — fromBuffer as default export
                 if (typeof ft?.fromBuffer === 'function') {
                     const type = await ft.fromBuffer(buffer);
                     if (type?.ext) ext = type.ext;
@@ -494,7 +500,6 @@ async function arslanPair(number, res = null) {
                     throw new Error('No file-type function');
                 }
             } catch (_) {
-                // Fallback: MIME se guess
                 if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
                 else if (mime.includes('png')) ext = 'png';
                 else if (mime.includes('webp')) ext = 'webp';
@@ -549,6 +554,9 @@ async function arslanPair(number, res = null) {
             await handleAntidelete(conn, updates, arslanStore);
         });
 
+        // ═══════════════════════════════════════════
+        //  🛑 CONNECTION UPDATE — greeting sirf ek baar
+        // ═══════════════════════════════════════════
         conn.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
             if (connection === 'open') {
@@ -561,11 +569,18 @@ async function arslanPair(number, res = null) {
 
                 const userJid = jidNormalizedUser(conn.user.id);
                 await addNumberToMongoDB(sanitizedNumber);
-                if (!existingSession) {
-                    await conn.sendMessage(userJid, {
-                        image: { url: config.IMAGE_PATH },
-                        caption: `\n╭────────────────────◇\n│✦ *RIZO-MD — CONNECTED* 🔥\n│✦ Type *${prefix}menu* to see all commands 💫\n│✦ Prefix 『 ${prefix} 』  Mode 〔${mode}〕\n╰────────────────────○\n*© Powered by RIZO-MD*`
-                    });
+
+                // 🛑 Greeting sirf ek baar per boot session per number
+                if (!existingSession && !global.__greetedNumbers.has(sanitizedNumber)) {
+                    global.__greetedNumbers.add(sanitizedNumber);
+                    try {
+                        await conn.sendMessage(userJid, {
+                            image: { url: config.IMAGE_PATH },
+                            caption: `\n╭────────────────────◇\n│✦ *RIZO-MD — CONNECTED* 🔥\n│✦ Type *${prefix}menu* to see all commands 💫\n│✦ Prefix 『 ${prefix} 』  Mode 〔${mode}〕\n╰────────────────────○\n*© Powered by RIZO-MD*`
+                        });
+                    } catch (e) {
+                        arslanLog(`Greeting send failed: ${e.message}`, 'warning');
+                    }
                 }
             }
             if (connection === 'close') {
@@ -575,12 +590,43 @@ async function arslanPair(number, res = null) {
         });
 
         // ===========================================================
-        // 🆕 MESSAGE HANDLER — Owner bypass + Private mode
+        //  🆕 MESSAGE HANDLER — Owner bypass + Private mode + ANTI-SPAM
         // ===========================================================
         conn.ev.on('messages.upsert', async (msg) => {
             try {
                 let mek = msg.messages[0];
                 if (!mek.message) return;
+
+                // ═══════════════════════════════════════════
+                //  🛑 LOOP GUARD #1 — Duplicate message skip
+                //  (same msg id 60s mein dobara aaye toh skip)
+                // ═══════════════════════════════════════════
+                const msgId = mek.key.id;
+                const nowTs = Date.now();
+                if (global.__processedMsgIds.has(msgId)) {
+                    const lastSeen = global.__processedMsgIds.get(msgId);
+                    if (nowTs - lastSeen < 60000) return;
+                }
+                global.__processedMsgIds.set(msgId, nowTs);
+
+                // cleanup purane entries
+                if (global.__processedMsgIds.size > 1000) {
+                    const cutoff = nowTs - 60000;
+                    for (const [id, ts] of global.__processedMsgIds) {
+                        if (ts < cutoff) global.__processedMsgIds.delete(id);
+                    }
+                }
+
+                // ═══════════════════════════════════════════
+                //  🛑 LOOP GUARD #2 — Bot ke khud ke messages skip
+                //  (sirf commands allow karo agar fromMe ho)
+                // ═══════════════════════════════════════════
+                if (mek.key.fromMe) {
+                    const selfBody = extractTextBody(mek.message).trim();
+                    const cfgPrefix = String(config.PREFIX || '.');
+                    const isOwnerCmd = selfBody.startsWith(cfgPrefix);
+                    if (!isOwnerCmd) return;
+                }
 
                 const userConfig = await getUserConfigFromMongoDB(number);
 
@@ -640,17 +686,11 @@ async function arslanPair(number, res = null) {
 
                 const isMe = Boolean(mek.key.fromMe) || sameParticipant(sender, conn.user.id) || sameParticipant(sender, conn.user.lid);
 
-                // ===========================================================
-                // 🆕 OWNER CHECK — Multi-number
-                // ===========================================================
                 const senderAlt = mek.key.participantAlt || mek.key.participantPn || mek.key.remoteJidAlt || mek.key.senderPn || '';
                 const isOwnerNum = isOwnerNumberCheck(senderNumber, senderAlt);
-                // Owner privilege is tied ONLY to the configured owner number.
-                // Being the connected WhatsApp session (isMe) does not grant owner powers.
                 const isOwner = isOwnerNum;
                 const isCreator = isOwner;
 
-                // Owner command log
                 if (isOwnerNum && isCmd) {
                     arslanLog(`👑 Owner: ${senderNumber} → ${command}`, 'success');
                 }
@@ -690,7 +730,6 @@ async function arslanPair(number, res = null) {
                     await incrementStats(sanitizedNumber, 'commandsUsed');
                     const cmd = typeof events.findCommand === 'function' ? events.findCommand(command) : (events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command))); 
                     if (cmd) {
-                        // 🆕 PRIVATE MODE — sirf owner (aur bot khud)
                         if (String(config.WORK_TYPE).toLowerCase() === 'private' && !isOwnerNum && !isMe) {
                             arslanLog(`⛔ Private mode blocked: ${senderNumber} → ${command}`, 'warning');
                             return;
@@ -750,13 +789,11 @@ async function arslanPair(number, res = null) {
 // ===========================================================
 router.get('/panel', (req, res) => res.sendFile(path.join(__dirname, 'panel.html')));
 
-// Public liveness endpoint: no secrets, phone numbers, or resource details.
 router.get('/api/health', (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ ok: true, service: 'RIZO Mini Bot', timestamp: new Date().toISOString() });
 });
 
-// Protected monitoring endpoints. Configure RIZO_PANEL_TOKEN in Railway Variables.
 router.get('/api/panel/metrics', requirePanelAuth, (req, res) => {
     const mem = process.memoryUsage();
     const connected = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected);
@@ -805,8 +842,6 @@ router.get('/code', async (req, res) => {
     if (!req.query.number) return res.status(400).json({ error: 'Number required' });
     const referralCode = String(req.query.ref || '').trim().toUpperCase();
     const number = String(req.query.number).replace(/[^0-9]/g, '');
-    // Attribute referral only when the pairing endpoint successfully returns a code.
-    // Each referred number can be credited once; self-referrals are rejected in database.js.
     const trackedRes = Object.create(res);
     trackedRes.json = (payload) => {
         if (payload && payload.code && referralCode) {
