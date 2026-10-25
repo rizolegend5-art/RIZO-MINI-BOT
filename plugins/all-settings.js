@@ -235,3 +235,46 @@ async(conn, mek, m, { args, isOwner, reply, botNumber, config }) => {
         reply(`*ABHI PREFIX ❮ ${config.PREFIX} ❯ HAI ☺️*\nJIS BHI NISHAN AP BOT CHALANA CHAHTE HAI WO NISHAN SET KERE ESE 😊*\n*❮SETPREFIX . ! + _ -❯*\n*JO BHI APKA DIL KARE 😍❣️*`);
     }
 });
+
+
+// ============================================================
+// 6. OWNER DISPLAY DETAILS
+// ============================================================
+cmd({
+    pattern: "ownername",
+    alias: ["setownername", "changeownername"],
+    desc: "Change the displayed owner name",
+    category: "settings",
+    react: "👑",
+    use: ".ownername RIZO HACKER"
+}, async (conn, mek, m, { args, isOwner, reply, botNumber, config }) => {
+    if (!isOwner) return reply("⛔ Yeh command sirf bot owner ke liye hai.");
+    const name = args.join(" ").trim();
+    if (!name) return reply(`👑 Current owner name: *${config.OWNER_NAME || 'RIZO HACKER'}*\nUse: *.ownername RIZO HACKER*`);
+    if (name.length > 40) return reply("❌ Owner name 40 characters se chhota rakho.");
+    await updateConfig('OWNER_NAME', name, botNumber, config, reply);
+});
+
+cmd({
+    pattern: "ownernumber",
+    alias: ["setownernumber", "changeownernumber"],
+    desc: "Set the displayed owner contact number",
+    category: "settings",
+    react: "📱",
+    use: ".ownernumber 923001234567"
+}, async (conn, mek, m, { args, isOwner, reply, botNumber, config }) => {
+    if (!isOwner) return reply("⛔ Yeh command sirf bot owner ke liye hai.");
+    const raw = args.join(" ").trim();
+    if (!raw) return reply(`📱 Current owner display number: *${config.OWNER_DISPLAY_NUMBER || 'Private'}*\nUse: *.ownernumber 923001234567*\n\n⚠️ Yeh sirf displayed contact update karta hai; bot access/authorized owners change nahi karta.`);
+    const number = raw.replace(/[^0-9]/g, '');
+    if (number.length < 8 || number.length > 15) return reply("❌ Valid country-code ke saath number likho, jaise 923001234567.");
+    config.OWNER_DISPLAY_NUMBER = number;
+    try {
+        const saved = await updateUserConfigInMongoDB(String(botNumber || ''), { ...config, OWNER_DISPLAY_NUMBER: number });
+        if (!saved) throw new Error('Database update returned false');
+        return reply(`✅ Owner display number update ho gaya: *${number}*\n⚠️ Security ke liye owner access list change nahi ki gayi.`);
+    } catch (e) {
+        console.error('ownernumber save error:', e.message);
+        return reply('❌ Number save nahi hua. MongoDB connection check karo.');
+    }
+});

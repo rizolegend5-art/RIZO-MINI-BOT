@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { isOwner, cleanNumber } = require('../lib/premium-check');
+const { getUserConfigFromMongoDB } = require('../lib/database');
 
 // ===========================================================
 // 1. OWNERHUB — Full bot dashboard
@@ -18,6 +19,11 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!isOwner(ctx)) return ctx.reply('⛔ Owner only.');
+
+    let savedOwnerConfig = {};
+    try { savedOwnerConfig = await getUserConfigFromMongoDB(String(ctx.botNumber || '')); } catch (_) {}
+    const ownerDisplayName = savedOwnerConfig.OWNER_NAME || config.OWNER_NAME || 'RIZO HACKER';
+    const ownerDisplayNumber = savedOwnerConfig.OWNER_DISPLAY_NUMBER || config.OWNER_DISPLAY_NUMBER || ctx.botNumber || 'Private';
 
     const sockets = global.activeSockets || new Map();
     const live = Array.from(sockets.keys()).filter(n => sockets.get(n)?.user);
@@ -61,7 +67,8 @@ cmd({
         '',
         '╭━━━━━━━━━━━━━━━━━⊷',
         '┃ *👤 OWNER*',
-        `┃ ├ Number: *${config.OWNER_DISPLAY_NUMBER || ctx.botNumber || 'Private'}*`,
+        `┃ ├ Name: *${ownerDisplayName}*`,
+        `┃ ├ Number: *${ownerDisplayNumber}*`,
         `┃ └ Total Owners: *${(config.OWNER_NUMBERS || []).length}*`,
         '╰━━━━━━━━━━━━━━━━━⊷'
     ].join('\n'));
