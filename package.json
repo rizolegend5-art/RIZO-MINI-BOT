@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "check": "node --check index.js && node --check main.js && node --check config.js && node --check arslan.js && node --check plugins/song.js && node --check plugins/anime.js && node --check plugins/anime-extra-20.js && node --check plugins/anime-video-pack.js",
+    "check": "node --check index.js && node --check main.js && node --check config.js && node --check arslan.js && node --check plugins/song.js && node --check plugins/anime.js && node --check plugins/anime-extra-20.js && node --check plugins/anime-video-pack.js && node --check plugins/drama.js",
     "check:islamic": "node --check plugins/islamic-rizo-30-pack.js",
     "check:anime": "node --check plugins/anime.js && node --check plugins/anime-extra-20.js && node --check plugins/anime-video-pack.js",
     "check:music": "node --check plugins/song.js",

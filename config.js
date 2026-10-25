@@ -25,6 +25,7 @@ module.exports = {
     FORCE_CHANNEL_1: process.env.FORCE_CHANNEL_1 || "https://whatsapp.com/channel/0029VbDTOwyJpe8nSyLzrR44",
     FORCE_CHANNEL_2: process.env.FORCE_CHANNEL_2 || "",
     BOT_NAME: process.env.BOT_NAME || "RIZO Mini Bot",
+    OWNER_NAME: process.env.OWNER_NAME || "RIZO HACKER",
     BOT_FOOTER: process.env.BOT_FOOTER || `© Powered by ${process.env.BOT_NAME || "RIZO Mini Bot"}`,
     WORK_TYPE: process.env.WORK_TYPE || "public",
 
