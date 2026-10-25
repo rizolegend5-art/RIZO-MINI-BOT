@@ -3,243 +3,172 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0a0716">
+<meta name="theme-color" content="#08090d">
+<meta name="description" content="Connect your WhatsApp to RIZO Mini Bot with a secure pairing code.">
 <title>RIZO Mini Bot · Pair Code</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a0716; --card:rgba(255,255,255,.055); --line:rgba(255,255,255,.12);
-  --text:#f4f1ff; --muted:#a69fc2; --ok:#3ddc97; --err:#ff6b81;
-  --a:#7c5cff; --b:#ff4fd8; --c:#22d3ee;
-  --sans:'Sora',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+  --bg:#08090d; --panel:rgba(18,20,27,.88); --panel2:#101117;
+  --line:rgba(255,255,255,.09); --line-hot:rgba(255,48,72,.45);
+  --text:#f7f7fa; --muted:#989ba8; --dim:#656977;
+  --red:#ff3048; --red2:#c8102e; --pink:#ff6377; --green:#48e6a0;
+  --sans:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'DM Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{min-height:100%}
+html{min-height:100%;background:var(--bg)}
 body{
-  font-family:var(--sans);color:var(--text);background:var(--bg);
-  display:flex;align-items:center;justify-content:center;
-  padding:max(20px,env(safe-area-inset-top)) 16px max(20px,env(safe-area-inset-bottom));
-  min-height:100vh;min-height:100dvh;overflow-x:hidden;position:relative;
+  min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;
+  padding:max(22px,env(safe-area-inset-top)) 16px max(22px,env(safe-area-inset-bottom));
+  overflow-x:hidden;position:relative;background:
+  radial-gradient(ellipse at 50% -15%,rgba(255,48,72,.16),transparent 48%),
+  radial-gradient(ellipse at 100% 100%,rgba(200,16,46,.11),transparent 36%),#08090d;
+  color:var(--text);font-family:var(--sans)
 }
-/* soft colour fields behind the card */
-body::before,body::after{
-  content:"";position:fixed;width:60vmax;height:60vmax;border-radius:50%;
-  filter:blur(90px);opacity:.35;z-index:0;pointer-events:none;
-}
-body::before{background:var(--a);top:-30vmax;left:-20vmax}
-body::after{background:var(--b);bottom:-34vmax;right:-22vmax;opacity:.25}
-
-.card{
-  position:relative;z-index:1;width:100%;max-width:420px;
-  background:var(--card);border:1px solid var(--line);border-radius:28px;
-  padding:30px 22px 22px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
-  box-shadow:0 30px 80px rgba(0,0,0,.55);
-}
-.brand{text-align:center;margin-bottom:26px}
-.logo{
-  width:76px;height:76px;margin:0 auto 14px;border-radius:50%;padding:3px;
-  background:conic-gradient(from 0deg,var(--a),var(--b),var(--c),var(--a));
-  animation:spin 6s linear infinite;
-}
-.logo span{
-  display:flex;align-items:center;justify-content:center;width:100%;height:100%;
-  border-radius:50%;background:#120d26;font-size:32px;overflow:hidden;
-  animation:spin 6s linear infinite reverse;
-}
+/* subtle technical grid + ambient light */
+body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.23;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:34px 34px;mask-image:linear-gradient(to bottom,black,transparent 85%)}
+.ambient{position:fixed;width:280px;height:280px;border-radius:50%;filter:blur(95px);pointer-events:none;z-index:0;opacity:.16;background:var(--red);animation:float 9s ease-in-out infinite alternate}
+.ambient.one{top:8%;left:-150px}.ambient.two{right:-160px;bottom:5%;animation-delay:-4s;opacity:.12}
+@keyframes float{to{transform:translate(45px,35px) scale(1.15)}}
+.card{position:relative;z-index:1;width:100%;max-width:430px;padding:27px 22px 21px;border:1px solid rgba(255,255,255,.105);border-radius:28px;background:linear-gradient(145deg,rgba(23,24,32,.96),rgba(12,13,18,.94));box-shadow:0 28px 90px rgba(0,0,0,.62),0 0 0 1px rgba(255,48,72,.035),inset 0 1px 0 rgba(255,255,255,.045);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);overflow:hidden}
+.card:before{content:"";position:absolute;left:14%;right:14%;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--red),#ff9aa6,transparent);opacity:.8}
+.topline{display:flex;justify-content:space-between;align-items:center;margin-bottom:27px;color:var(--dim);font:500 10px var(--mono);letter-spacing:1.7px;text-transform:uppercase}
+.live{display:inline-flex;align-items:center;gap:7px;color:#c5c8d2;letter-spacing:1px}.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px rgba(72,230,160,.75);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45;box-shadow:0 0 3px rgba(72,230,160,.3)}}
+.brand{text-align:center;margin-bottom:27px}
+.logo-shell{width:88px;height:88px;margin:0 auto 17px;padding:2px;border-radius:27px;position:relative;background:linear-gradient(145deg,#ff8795,var(--red) 43%,#5b0a19);box-shadow:0 10px 32px rgba(255,48,72,.22);transform:rotate(-4deg)}
+.logo-shell:after{content:"";position:absolute;inset:-6px;border:1px solid rgba(255,48,72,.18);border-radius:31px;animation:ringPulse 3s ease-in-out infinite}
+@keyframes ringPulse{50%{transform:scale(1.06);opacity:.45}}
+.logo{width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:25px;background:#0d0e13;transform:rotate(4deg);font-size:37px}
 .logo img{width:100%;height:100%;object-fit:cover}
-@keyframes spin{to{transform:rotate(360deg)}}
-h1{
-  font-size:30px;font-weight:800;letter-spacing:.5px;
-  background:linear-gradient(90deg,#fff,#cbbcff 50%,#ff9bea);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-.sub{margin-top:6px;font-size:14px;color:var(--muted)}
-
-label{display:block;font-size:13px;color:var(--muted);margin:0 0 8px 4px}
-.field{
-  display:flex;align-items:center;gap:10px;
-  background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:16px;
-  padding:0 16px;transition:border-color .2s,box-shadow .2s;
-}
-.field:focus-within{border-color:var(--a);box-shadow:0 0 0 4px rgba(124,92,255,.22)}
-.field b{color:var(--muted);font-weight:600;font-size:18px}
-#number{
-  flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);
-  font:600 18px var(--sans);padding:16px 0;letter-spacing:1px;
-}
-#number::placeholder{color:#5f5880;letter-spacing:1px}
-.hint{font-size:12px;color:var(--muted);margin:8px 0 0 4px}
-
-.btn{
-  width:100%;margin-top:18px;border:0;cursor:pointer;color:#fff;
-  font:700 16px var(--sans);padding:16px;border-radius:16px;
-  background:linear-gradient(110deg,var(--a),var(--b));
-  box-shadow:0 12px 30px rgba(124,92,255,.38);
-  display:flex;align-items:center;justify-content:center;gap:10px;
-  transition:transform .15s,filter .2s,box-shadow .2s;
-}
-.btn:hover{filter:brightness(1.1)}
-.btn:active{transform:scale(.98)}
-.btn:disabled{filter:grayscale(.5) brightness(.8);cursor:wait;box-shadow:none}
-.btn:focus-visible,.copy:focus-visible{outline:3px solid var(--c);outline-offset:3px}
-.spin{width:18px;height:18px;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:none;animation:spin .7s linear infinite}
-.btn.loading .spin{display:block}
-
-/* result */
-#result{display:none;margin-top:20px}
-#result.show{display:block;animation:pop .35s cubic-bezier(.2,.9,.3,1.2)}
-@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
-.codeRing{
-  padding:2px;border-radius:20px;
-  background:conic-gradient(from var(--ang,0deg),var(--a),var(--b),var(--c),var(--a));
-  animation:ring 4s linear infinite;
-}
-@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
-@keyframes ring{to{--ang:360deg}}
-.codeBox{
-  background:#0d0920;border-radius:18px;padding:22px 14px;text-align:center;
-  font:700 30px var(--mono);letter-spacing:4px;min-height:74px;
-  display:flex;align-items:center;justify-content:center;word-break:break-word;
-}
-.codeBox.err{font:600 15px var(--sans);letter-spacing:0;color:var(--err);line-height:1.5}
-.codeBox.wait{font:600 15px var(--sans);letter-spacing:0;color:var(--muted)}
-.copy{
-  display:none;width:100%;margin-top:12px;padding:12px;border-radius:14px;cursor:pointer;
-  background:transparent;color:var(--text);border:1px solid var(--line);font:600 14px var(--sans);
-  transition:border-color .2s,color .2s;
-}
-.copy.show{display:block}
-.copy.done{border-color:var(--ok);color:var(--ok)}
-
-.steps{display:none;margin-top:18px;padding:16px 16px 16px 18px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
-.steps.show{display:block}
-.steps h2{font-size:14px;font-weight:600;margin-bottom:10px}
-.steps ol{padding-left:18px;color:var(--muted);font-size:13px;line-height:1.75}
-.steps li::marker{color:var(--b);font-weight:700}
-.steps em{color:var(--text);font-style:normal}
-
-footer{text-align:center;margin-top:22px;font-size:12px;color:#7d7699;line-height:1.7}
-footer strong{color:var(--muted);font-weight:600}
-
-@media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation:none!important;transition:none!important}
-}
+.eyebrow{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;color:#ff7c8c;font:500 10px var(--mono);letter-spacing:2.8px;text-transform:uppercase}
+.eyebrow:before,.eyebrow:after{content:"";width:20px;height:1px;background:linear-gradient(90deg,transparent,var(--red))}.eyebrow:after{transform:scaleX(-1)}
+h1{font-size:clamp(27px,7vw,33px);font-weight:900;letter-spacing:-1.2px;line-height:1.15}
+h1 span{color:var(--red);text-shadow:0 0 25px rgba(255,48,72,.23)}
+.sub{margin-top:9px;color:var(--muted);font-size:13px;line-height:1.6}
+.secure-note{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:14px;color:#aeb1bd;font-size:11px}
+.secure-note svg{color:var(--green);flex-shrink:0}
+.form-area{padding:17px;border:1px solid var(--line);border-radius:20px;background:rgba(0,0,0,.19)}
+.label-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 2px 9px}
+label{font-size:12px;font-weight:800;color:#e5e6ec;letter-spacing:.2px}.country-hint{font:10px var(--mono);color:var(--dim)}
+.field{display:flex;align-items:center;gap:10px;padding:0 14px;border:1px solid rgba(255,255,255,.11);border-radius:14px;background:#0a0b10;transition:border-color .2s,box-shadow .2s,background .2s}
+.field:focus-within{border-color:var(--red);background:#0e0c12;box-shadow:0 0 0 4px rgba(255,48,72,.09),0 0 22px rgba(255,48,72,.06)}
+.plus{display:flex;align-items:center;justify-content:center;width:27px;height:27px;border-radius:8px;background:rgba(255,48,72,.12);color:#ff7787;font:500 17px var(--mono)}
+#number{width:100%;min-width:0;padding:15px 0;border:0;outline:0;background:transparent;color:var(--text);font:500 16px var(--mono);letter-spacing:.6px}
+#number::placeholder{color:#535663;font-size:14px}
+.hint{margin:9px 2px 0;color:var(--dim);font-size:11px;line-height:1.5}
+.btn{position:relative;isolation:isolate;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:14px;padding:16px;border:1px solid rgba(255,130,145,.35);border-radius:14px;overflow:hidden;cursor:pointer;color:#fff;background:linear-gradient(105deg,#d80e2d,#ff3048 52%,#d91939);box-shadow:0 10px 28px rgba(255,25,60,.19),inset 0 1px 0 rgba(255,255,255,.18);font:800 14px var(--sans);letter-spacing:.2px;transition:transform .18s,filter .18s,box-shadow .18s}
+.btn:before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 20%,rgba(255,255,255,.18) 48%,transparent 75%);transform:translateX(-120%);transition:transform .6s}
+.btn:hover:before{transform:translateX(120%)}.btn:hover{filter:brightness(1.08);box-shadow:0 13px 34px rgba(255,25,60,.26)}.btn:active{transform:scale(.985)}.btn:disabled{filter:saturate(.45);cursor:wait;box-shadow:none}.btn:focus-visible,.copy:focus-visible{outline:3px solid #ff9ba7;outline-offset:3px}
+.btn-icon{font-size:17px}.spin{width:17px;height:17px;border:2px solid rgba(255,255,255,.35);border-top-color:white;border-radius:50%;display:none;animation:rotate .7s linear infinite}@keyframes rotate{to{transform:rotate(360deg)}}.btn.loading .spin{display:block}.btn.loading .btn-icon{display:none}
+#result{display:none;margin-top:18px}#result.show{display:block;animation:pop .35s ease-out}@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.result-label{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:9px;color:var(--muted);font:500 10px var(--mono);letter-spacing:2px;text-transform:uppercase}.result-label:before,.result-label:after{content:"";height:1px;flex:1;background:var(--line)}
+.codeRing{padding:1px;border-radius:17px;background:linear-gradient(120deg,#ff9aa7,var(--red),#6f1424,var(--red));background-size:200% 200%;animation:borderFlow 4s ease infinite}@keyframes borderFlow{50%{background-position:100% 100%}}
+.codeBox{min-height:76px;display:flex;align-items:center;justify-content:center;gap:10px;padding:18px 12px;border-radius:16px;background:#0b0c11;text-align:center;color:#fff;font:500 29px var(--mono);letter-spacing:3px;overflow-wrap:anywhere}
+.codeBox.err{font:700 13px var(--sans);letter-spacing:0;color:#ff8290;line-height:1.6}.codeBox.wait{font:600 13px var(--sans);letter-spacing:0;color:var(--muted)}
+.copy{display:none;width:100%;margin-top:10px;padding:12px;border:1px solid rgba(255,255,255,.12);border-radius:12px;cursor:pointer;background:rgba(255,255,255,.035);color:#e9eaf0;font:700 12px var(--sans);transition:background .2s,border-color .2s,color .2s}.copy.show{display:block}.copy:hover{border-color:var(--line-hot);background:rgba(255,48,72,.06)}.copy.done{border-color:rgba(72,230,160,.45);color:var(--green)}
+.steps{display:none;margin-top:14px;padding:15px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.025)}.steps.show{display:block;animation:pop .3s ease-out}.steps h2{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;font-weight:800}.steps h2 span{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:7px;background:rgba(255,48,72,.12);color:#ff7a8a}.steps ol{padding-left:23px;color:var(--muted);font-size:11px;line-height:1.85}.steps li{padding-left:3px}.steps li::marker{color:#ff6478;font-family:var(--mono);font-weight:500}.steps em{font-style:normal;color:#f0f0f4;font-weight:700}
+.footer{margin-top:20px;text-align:center}.footer-line{height:1px;margin-bottom:15px;background:linear-gradient(90deg,transparent,var(--line),transparent)}.footer-brand{color:#f2f2f6;font-size:11px;font-weight:900;letter-spacing:1.8px}.footer-brand span{color:var(--red)}.footer-sub{margin-top:5px;color:var(--dim);font:10px var(--mono);letter-spacing:.7px}.footer-badge{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 9px;border:1px solid rgba(255,255,255,.07);border-radius:99px;color:#8c909d;font-size:9px;letter-spacing:.4px}.footer-badge i{width:5px;height:5px;border-radius:50%;background:var(--green)}
+@media(max-width:360px){.card{padding:22px 16px 18px;border-radius:23px}.form-area{padding:13px}.topline{margin-bottom:23px}.codeBox{font-size:25px;letter-spacing:2px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
+<div class="ambient one" aria-hidden="true"></div><div class="ambient two" aria-hidden="true"></div>
 <main class="card">
+  <div class="topline"><span>RIZO SYSTEMS / 01</span><span class="live"><i class="live-dot"></i> PAIR PORTAL</span></div>
   <header class="brand">
-    <div class="logo"><span><img src="https://files.catbox.moe/a622og.jpg" alt="" onerror="this.replaceWith('👑')"></span></div>
-    <h1>RIZO Mini Bot</h1>
-    <p class="sub">Link your WhatsApp with a pair code</p>
+    <div class="logo-shell"><div class="logo"><img src="https://files.catbox.moe/a622og.jpg" alt="RIZO logo" onerror="this.style.display='none';this.parentElement.textContent='👑'"></div></div>
+    <div class="eyebrow">Secure connection</div>
+    <h1>RIZO <span>Mini Bot</span></h1>
+    <p class="sub">Apna WhatsApp account pair code ke zariye link karein.</p>
+    <div class="secure-note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 19 6v5c0 4.8-3 8-7 10-4-2-7-5.2-7-10V6l7-3Z" stroke="currentColor" stroke-width="1.8"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Pair code sirf apne trusted bot session ke liye use karein.</div>
   </header>
-
-  <label for="number">WhatsApp number</label>
-  <div class="field">
-    <b>+</b>
-    <input id="number" type="tel" inputmode="numeric" autocomplete="tel" placeholder="923XXXXXXXXX" maxlength="18">
-  </div>
-  <p class="hint">Country code ke saath likho, bina + ya space ke.</p>
-
-  <button class="btn" id="go" type="button">
-    <span class="spin" aria-hidden="true"></span><span id="goText">Get pair code</span>
-  </button>
-
-  <section id="result" aria-live="polite">
+  <section class="form-area">
+    <div class="label-row"><label for="number">WhatsApp number</label><span class="country-hint">COUNTRY CODE INCLUDED</span></div>
+    <div class="field"><span class="plus" aria-hidden="true">+</span><input id="number" type="tel" inputmode="numeric" autocomplete="tel" placeholder="923XXXXXXXXX" maxlength="18" aria-describedby="numberHint"></div>
+    <p class="hint" id="numberHint">Country code ke saath number likhein — plus sign ya spaces ki zaroorat nahi.</p>
+    <button class="btn" id="go" type="button"><span class="spin" aria-hidden="true"></span><span class="btn-icon" aria-hidden="true">↗</span><span id="goText">Generate Pair Code</span></button>
+  </section>
+  <section id="result" aria-live="polite" aria-atomic="true">
+    <div class="result-label">Your pairing code</div>
     <div class="codeRing"><div class="codeBox" id="codeBox">----</div></div>
-    <button class="copy" id="copyBtn" type="button">Copy code</button>
+    <button class="copy" id="copyBtn" type="button">▣ &nbsp; Copy pairing code</button>
   </section>
-
   <section class="steps" id="steps">
-    <h2>Code aane ke baad</h2>
-    <ol>
-      <li>WhatsApp kholo, <em>Linked devices</em> me jao</li>
-      <li><em>Link a device</em> dabao, phir <em>Link with phone number instead</em></li>
-      <li>Upar wala code daalo</li>
-    </ol>
+    <h2><span>✓</span> WhatsApp par link kaise karein</h2>
+    <ol><li>WhatsApp kholein aur <em>Linked devices</em> mein jaayein.</li><li><em>Link a device</em> par tap karein.</li><li><em>Link with phone number instead</em> choose karke code enter karein.</li></ol>
   </section>
-
-  <footer>
-    <strong>RIZO Mini Bot</strong><br>
-    WhatsApp pairing
-  </footer>
+  <footer class="footer"><div class="footer-line"></div><div class="footer-brand">RIZO <span>MINI</span> BOT</div><div class="footer-sub">PAIRING PORTAL · MOBILE OPTIMIZED</div><div class="footer-badge"><i></i> Connection request handled by your bot server</div></footer>
 </main>
-
 <script>
 const $ = id => document.getElementById(id);
 const input = $('number'), go = $('go'), goText = $('goText');
 const result = $('result'), codeBox = $('codeBox'), copyBtn = $('copyBtn'), steps = $('steps');
 let currentCode = '';
-
 const messages = {
   already_connected: 'Yeh number pehle se connected hai.',
-  connection_in_progress: 'Connection chal raha hai, thodi der ruk ke dobara try karo.',
+  connection_in_progress: 'Connection chal raha hai, thodi der ruk kar dobara try karein.',
   reconnecting: 'Is number ka session pehle se hai, reconnect ho raha hai.'
 };
-
 function show(text, cls) {
   result.classList.add('show');
   codeBox.className = 'codeBox' + (cls ? ' ' + cls : '');
   codeBox.textContent = text;
   copyBtn.classList.remove('show');
   steps.classList.remove('show');
+  currentCode = '';
 }
-
 function setBusy(b) {
   go.disabled = b;
   go.classList.toggle('loading', b);
-  goText.textContent = b ? 'Connecting...' : 'Get pair code';
+  goText.textContent = b ? 'Generating secure code...' : 'Generate Pair Code';
 }
-
 async function getCode() {
   const num = input.value.replace(/[^0-9]/g, '');
-  if (!num) { show('Apna WhatsApp number likho.', 'err'); input.focus(); return; }
-  if (num.length < 8) { show('Number poora likho, country code ke saath.', 'err'); return; }
-
-  setBusy(true);
-  show('Code ban raha hai...', 'wait');
+  if (!num) { show('Apna WhatsApp number likhein.', 'err'); input.focus(); return; }
+  if (num.length < 8 || num.length > 15) { show('Number 8 se 15 digits ka hona chahiye, country code ke saath.', 'err'); input.focus(); return; }
+  setBusy(true); show('Pair code generate ho raha hai...', 'wait');
   try {
     const query = new URLSearchParams({ number: num });
-    const res = await fetch('/code?' + query.toString());
-    const data = await res.json();
+    const res = await fetch('/code?' + query.toString(), { headers: { Accept: 'application/json' } });
+    let data;
+    try { data = await res.json(); } catch (_) { throw new Error('Server ne valid JSON response nahi diya.'); }
+    if (!res.ok && !data.code) throw new Error(data.message || data.error || 'Server request fail hui.');
     if (data.code) {
       currentCode = String(data.code);
-      const c = currentCode.replace(/[^A-Za-z0-9]/g, '');
-      const pretty = c.length === 8 ? c.slice(0, 4) + '-' + c.slice(4) : currentCode;
-      show(pretty);
-      copyBtn.textContent = 'Copy code';
-      copyBtn.classList.remove('done');
-      copyBtn.classList.add('show');
-      steps.classList.add('show');
+      const clean = currentCode.replace(/[^A-Za-z0-9]/g, '');
+      const pretty = clean.length === 8 ? clean.slice(0, 4) + '-' + clean.slice(4) : currentCode;
+      codeBox.className = 'codeBox'; codeBox.textContent = pretty;
+      result.classList.add('show'); copyBtn.textContent = '▣  Copy pairing code'; copyBtn.classList.remove('done'); copyBtn.classList.add('show'); steps.classList.add('show');
     } else {
-      show(messages[data.status] || data.message || data.error || 'Kuch galat hua, dobara try karo.', 'err');
+      show(messages[data.status] || data.message || data.error || 'Kuch galat hua. Thori der baad dobara try karein.', 'err');
     }
   } catch (e) {
-    show('Server se connect nahi hua. Internet check karke dobara try karo.', 'err');
-  } finally {
-    setBusy(false);
-  }
+    show(e.message && e.message.includes('Server') ? e.message : 'Server se connect nahi hua. Internet check karke dobara try karein.', 'err');
+  } finally { setBusy(false); }
 }
-
 async function copyCode() {
+  if (!currentCode) return;
   try {
-    await navigator.clipboard.writeText(currentCode);
+    if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(currentCode);
+    else throw new Error('Clipboard unavailable');
   } catch (_) {
-    const t = document.createElement('textarea');
-    t.value = currentCode; document.body.appendChild(t); t.select();
-    document.execCommand('copy'); t.remove();
+    const t = document.createElement('textarea'); t.value = currentCode; t.setAttribute('readonly',''); t.style.position='fixed'; t.style.opacity='0'; document.body.appendChild(t); t.select();
+    const ok = document.execCommand('copy'); t.remove();
+    if (!ok) { copyBtn.textContent = 'Code ko manually select karein'; return; }
   }
-  copyBtn.textContent = 'Copied';
-  copyBtn.classList.add('done');
-  setTimeout(() => { copyBtn.textContent = 'Copy code'; copyBtn.classList.remove('done'); }, 1600);
+  copyBtn.textContent = '✓  Code copied'; copyBtn.classList.add('done');
+  setTimeout(() => { copyBtn.textContent = '▣  Copy pairing code'; copyBtn.classList.remove('done'); }, 1800);
 }
-
 go.addEventListener('click', getCode);
 copyBtn.addEventListener('click', copyCode);
-input.addEventListener('keydown', e => { if (e.key === 'Enter') getCode(); });
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !go.disabled) getCode(); });
+input.addEventListener('input', () => { input.value = input.value.replace(/[^0-9]/g, ''); });
 </script>
 </body>
 </html>
