@@ -168,3 +168,18 @@ Third-party downloader/API availability and live WhatsApp behavior depend on the
 - `.currency 100 USD PKR` converts using the latest published reference rate.
 - `.define serendipity` looks up an English definition.
 - `.unit 10 km mi` converts length, weight, or temperature without an external API.
+
+
+## Local JSON storage (MongoDB removed)
+
+This build stores sessions, per-number settings, active numbers, OTPs, usage stats, promo codes, premium grants, and anti-delete settings in JSON files. No MongoDB URI or Mongoose dependency is required.
+
+**Railway:** attach a persistent Volume and mount it at `/app/data`. The app stores database JSON under `/app/data/store` by default. You can override this with `RIZO_DATA_DIR`. Without a persistent volume, Railway may erase JSON data during redeploy/restart, so session persistence is not guaranteed. Keep this directory private because it contains WhatsApp session credentials.
+
+
+### Referral system (Local JSON)
+- `.refer` creates/shows your personal code and count.
+- `.claimref CODE` registers a referral once per WhatsApp number.
+- `.refstats` shows your stats; `.refleaderboard` shows the top 10.
+- Every 3 successful referrals grants the referrer 7 days of premium.
+- Referral records are stored in `data/store/referrals.json`; mount a persistent Railway volume at `/app/data`.

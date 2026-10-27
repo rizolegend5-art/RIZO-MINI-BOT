@@ -1,0 +1,14 @@
+RIZO MINI V3 — OWNER LIVE CODE INSTALLER
+
+After deploying this ZIP, send the bot an owner-authenticated message:
+1) Send a message containing the JavaScript plugin code.
+2) Reply to that code message with: .addcode myplugin
+
+The code is saved to plugins/live-myplugin.js and required immediately, without a bot restart. For commands, use the existing plugin API, for example:
+
+const { cmd } = require("../arslan");
+cmd({ pattern: "hello2", desc: "Example", category: "general" }, async (conn, mek, m, ctx) => {
+  await ctx.reply("Hello from a live plugin!");
+});
+
+Security: this executes arbitrary JavaScript in the bot process with access to the process environment and files. Only use code you fully trust. Owner check relies on the bot's existing ctx.isOwner detection.

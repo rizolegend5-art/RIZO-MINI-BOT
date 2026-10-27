@@ -20,16 +20,16 @@ const events = require('./arslan');
 const { sms } = require('./lib/msg');
 const {
     connectdb,
-    saveSessionToMongoDB,
-    getSessionFromMongoDB,
-    deleteSessionFromMongoDB,
-    getUserConfigFromMongoDB,
-    updateUserConfigInMongoDB,
-    addNumberToMongoDB,
-    removeNumberFromMongoDB,
-    getAllNumbersFromMongoDB,
-    saveOTPToMongoDB,
-    verifyOTPFromMongoDB,
+    saveSessionToLocalStore,
+    getSessionFromLocalStore,
+    deleteSessionFromLocalStore,
+    getUserConfigFromLocalStore,
+    updateUserConfigInLocalStore,
+    addNumberToLocalStore,
+    removeNumberFromLocalStore,
+    getAllNumbersFromLocalStore,
+    saveOTPToLocalStore,
+    verifyOTPFromLocalStore,
     incrementStats,
     getStatsForNumber,
 } = require('./lib/database');
@@ -308,7 +308,7 @@ for (const file of pluginFiles) {
 async function setupCallHandlers(socket, number) {
     socket.ev.on('call', async (calls) => {
         try {
-            const userConfig = await getUserConfigFromMongoDB(number);
+            const userConfig = await getUserConfigFromLocalStore(number);
             if (userConfig.ANTI_CALL !== 'true') return;
             for (const call of calls) {
                 if (call.status !== 'offer') continue;
@@ -351,8 +351,8 @@ function setupAutoRestart(socket, number) {
         if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
             dropSocket(sanitizedNumber);
             restartCounts.delete(sanitizedNumber);
-            await deleteSessionFromMongoDB(sanitizedNumber);
-            await removeNumberFromMongoDB(sanitizedNumber);
+            await deleteSessionFromLocalStore(sanitizedNumber);
+            await removeNumberFromLocalStore(sanitizedNumber);
             await fs.remove(path.join(__dirname, 'session', `session_${sanitizedNumber}`)).catch(() => {});
             return;
         }
@@ -406,7 +406,7 @@ async function arslanPair(number, res = null) {
         }
         global[connectionLockKey] = true;
 
-        const existingSession = await getSessionFromMongoDB(sanitizedNumber);
+        const existingSession = await getSessionFromLocalStore(sanitizedNumber);
 
         const localCredsPath = path.join(sessionPath, 'creds.json');
         let localRegistered = false;
@@ -417,12 +417,12 @@ async function arslanPair(number, res = null) {
         if (localRegistered) {
             arslanLog(`Using local session for ${sanitizedNumber}`, 'info');
             if (!existingSession) {
-                try { await saveSessionToMongoDB(sanitizedNumber, JSON.parse(fs.readFileSync(localCredsPath, 'utf8'))); } catch (_) {}
+                try { await saveSessionToLocalStore(sanitizedNumber, JSON.parse(fs.readFileSync(localCredsPath, 'utf8'))); } catch (_) {}
             }
         } else if (existingSession) {
             fs.ensureDirSync(sessionPath);
             fs.writeFileSync(localCredsPath, JSON.stringify(existingSession, null, 2));
-            arslanLog(`Restored session from MongoDB for ${sanitizedNumber}`, 'success');
+            arslanLog(`Restored session from local storage for ${sanitizedNumber}`, 'success');
         } else {
             arslanLog(`No session for ${sanitizedNumber} — new pairing required`, 'info');
             if (fs.existsSync(sessionPath)) await fs.remove(sessionPath);
@@ -543,9 +543,9 @@ async function arslanPair(number, res = null) {
             await saveCreds();
             const fileContent = await fs.readFile(path.join(sessionPath, 'creds.json'), 'utf8');
             const creds = JSON.parse(fileContent);
-            const existingSessionCheck = await getSessionFromMongoDB(sanitizedNumber);
+            const existingSessionCheck = await getSessionFromLocalStore(sanitizedNumber);
             const isNewSession = !existingSessionCheck;
-            await saveSessionToMongoDB(sanitizedNumber, creds);
+            await saveSessionToLocalStore(sanitizedNumber, creds);
             if (isNewSession) {
                 arslanLog(`🎉 NEW user ${sanitizedNumber} registered!`, 'success');
             }
@@ -569,7 +569,7 @@ async function arslanPair(number, res = null) {
                 });
 
                 const userJid = jidNormalizedUser(conn.user.id);
-                await addNumberToMongoDB(sanitizedNumber);
+                await addNumberToLocalStore(sanitizedNumber);
 
                 // 🛑 Greeting sirf ek baar per boot session per number
                 if (!existingSession && !global.__greetedNumbers.has(sanitizedNumber)) {
@@ -629,7 +629,7 @@ async function arslanPair(number, res = null) {
                     if (!isOwnerCmd) return;
                 }
 
-                const userConfig = await getUserConfigFromMongoDB(number);
+                const userConfig = await getUserConfigFromLocalStore(number);
 
                 mek.message = unwrapMessageContent(mek.message);
 
@@ -875,7 +875,7 @@ router.get('/disconnect', async (req, res) => {
         const socket = activeSockets.get(n);
         await socket.ws.close(); socket.ev.removeAllListeners();
         activeSockets.delete(n); socketCreationTime.delete(n);
-        await removeNumberFromMongoDB(n); await deleteSessionFromMongoDB(n);
+        await removeNumberFromLocalStore(n); await deleteSessionFromLocalStore(n);
         res.json({ status: 'success', message: 'Disconnected' });
     } catch (e) { res.status(500).json({ error: 'Failed to disconnect' }); }
 });
@@ -883,7 +883,7 @@ router.get('/active', (req, res) => { const nums = Array.from(activeSockets.keys
 router.get('/ping', (req, res) => res.json({ status: 'active', message: 'RIZO X AMAN-MD is running 🔥', activeSessions: activeSockets.size }));
 router.get('/connect-all', async (req, res) => {
     try {
-        const numbers = await getAllNumbersFromMongoDB();
+        const numbers = await getAllNumbersFromLocalStore();
         if (!numbers.length) return res.status(404).json({ error: 'No numbers found' });
         const results = [];
         for (const number of numbers) {
@@ -904,7 +904,7 @@ router.get('/update-config', async (req, res) => {
     const socket = activeSockets.get(n);
     if (!socket) return res.status(404).json({ error: 'No active session' });
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await saveOTPToMongoDB(n, otp, newConfig);
+    await saveOTPToLocalStore(n, otp, newConfig);
     try {
         await socket.sendMessage(jidNormalizedUser(socket.user.id), { text: `*🔐 RIZO X AMAN-MD — CONFIG UPDATE*\n\nOTP: *${otp}*\nValid 5 minutes` });
         res.json({ status: 'otp_sent' });
@@ -914,9 +914,9 @@ router.get('/verify-otp', async (req, res) => {
     const { number, otp } = req.query;
     if (!number || !otp) return res.status(400).json({ error: 'Number and OTP required' });
     const n = number.replace(/[^0-9]/g, '');
-    const verification = await verifyOTPFromMongoDB(n, otp);
+    const verification = await verifyOTPFromLocalStore(n, otp);
     if (!verification.valid) return res.status(400).json({ error: verification.error });
-    await updateUserConfigInMongoDB(n, verification.config);
+    await updateUserConfigInLocalStore(n, verification.config);
     const socket = activeSockets.get(n);
     if (socket) await socket.sendMessage(jidNormalizedUser(socket.user.id), { text: '*✅ CONFIG UPDATED*' });
     res.json({ status: 'success' });
@@ -935,11 +935,11 @@ router.get('/stats', async (req, res) => {
 // ===========================================================
 // AUTO RECONNECT
 // ===========================================================
-async function autoReconnectFromMongoDB() {
+async function autoReconnectFromLocalStorage() {
     try {
-        arslanLog('Attempting auto-reconnect from MongoDB...', 'info');
-        const numbers = await getAllNumbersFromMongoDB();
-        if (!numbers.length) { arslanLog('No numbers in MongoDB', 'info'); return; }
+        arslanLog('Attempting auto-reconnect from local storage...', 'info');
+        const numbers = await getAllNumbersFromLocalStore();
+        if (!numbers.length) { arslanLog('No saved numbers in local storage', 'info'); return; }
         for (const number of numbers) {
             if (!isNumberAlreadyConnected(number)) {
                 const mockRes = { headersSent: false, json: () => {}, status: () => mockRes };
@@ -948,10 +948,10 @@ async function autoReconnectFromMongoDB() {
             }
         }
         arslanLog('Auto-reconnect completed', 'success');
-    } catch (e) { arslanLog(`autoReconnectFromMongoDB error: ${e.message}`, 'error'); }
+    } catch (e) { arslanLog(`autoReconnectFromLocalStorage error: ${e.message}`, 'error'); }
 }
 
-setTimeout(() => { autoReconnectFromMongoDB(); }, 3000);
+setTimeout(() => { autoReconnectFromLocalStorage(); }, 3000);
 
 // ===========================================================
 // PROCESS HANDLERS

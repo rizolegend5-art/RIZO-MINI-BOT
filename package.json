@@ -1,7 +1,7 @@
 {
   "name": "RIZO X AMAN-MD-bot",
-  "version": "2.5.0",
-  "description": "RIZO HELL-MD WhatsApp Bot \u2014 persistent settings, anime metadata and video-link commands",
+  "version": "2.6.0",
+  "description": "RIZO HELL-MD WhatsApp Bot \u2014 local JSON storage, no MongoDB",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -37,7 +37,6 @@
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "file-type": "^16.5.4",
     "edge-tts-universal": "^1.0.4",
-    "mongoose": "^8.0.0",
     "moment-timezone": "^0.6.0"
   }
 }
