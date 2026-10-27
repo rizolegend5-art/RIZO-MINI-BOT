@@ -1,5 +1,5 @@
 const { cmd } = require('../arslan');
-const { getUserConfigFromMongoDB, updateUserConfigInMongoDB } = require('../lib/database');
+const { getUserConfigFromLocalStore, updateUserConfigInLocalStore } = require('../lib/database');
 
 // Helper function to update config in memory and database
 const updateConfig = async (key, value, botNumber, config, reply) => {
@@ -11,13 +11,13 @@ const updateConfig = async (key, value, botNumber, config, reply) => {
         const newConfig = { ...config }; 
         newConfig[key] = value;
         
-        const saved = await updateUserConfigInMongoDB(String(botNumber || ''), newConfig);
+        const saved = await updateUserConfigInLocalStore(String(botNumber || ''), newConfig);
         if (!saved) throw new Error('Database update returned false');
         
         return reply(`✅ *${key}* has been updated to: *${value}*`);
     } catch (e) {
         console.error(e);
-        return reply("❌ Database save nahi hua. MongoDB URI/connection check karo aur phir dobara try karo.");
+        return reply("❌ Database save nahi hua. local storage folder check karo aur phir dobara try karo.");
     }
 };
 
@@ -267,7 +267,7 @@ cmd({
     const raw = args.join(" ").trim();
     if (!raw) {
         let savedOwnerConfig = {};
-        try { savedOwnerConfig = await getUserConfigFromMongoDB(String(botNumber || '')); } catch (_) {}
+        try { savedOwnerConfig = await getUserConfigFromLocalStore(String(botNumber || '')); } catch (_) {}
         const currentNumber = savedOwnerConfig.OWNER_DISPLAY_NUMBER || config.OWNER_DISPLAY_NUMBER || 'Private';
         return reply(`📱 Current owner display number: *${currentNumber}*\nUse: *.ownernumber 923001234567*\n\n⚠️ Yeh sirf displayed contact update karta hai; bot access/authorized owners change nahi karta.`);
     }
@@ -275,12 +275,12 @@ cmd({
     if (number.length < 8 || number.length > 15) return reply("❌ Valid country-code ke saath number likho, jaise 923001234567.");
     try {
         const nextConfig = { ...config, OWNER_DISPLAY_NUMBER: number };
-        const saved = await updateUserConfigInMongoDB(String(botNumber || ''), nextConfig);
+        const saved = await updateUserConfigInLocalStore(String(botNumber || ''), nextConfig);
         if (!saved) throw new Error('Database update returned false');
         config.OWNER_DISPLAY_NUMBER = number;
         return reply(`✅ Owner display number update ho gaya: *${number}*\n⚠️ Security ke liye owner access list change nahi ki gayi.`);
     } catch (e) {
         console.error('ownernumber save error:', e.message);
-        return reply('❌ Number save nahi hua. MongoDB connection check karo.');
+        return reply('❌ Number save nahi hua. local storage folder check karo.');
     }
 });

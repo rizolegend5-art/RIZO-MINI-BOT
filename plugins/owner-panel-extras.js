@@ -29,13 +29,12 @@ cmd({ pattern: 'bothealth', alias: ['healthcheck', 'rizohealth'], desc: 'Owner: 
   try { pluginCount = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js')).length; } catch {}
   const sockets = global.activeSockets instanceof Map ? global.activeSockets : new Map();
   const live = [...sockets.values()].filter(s => s && s.user).length;
-  const dbState = (() => { try { return require('mongoose').connection.readyState; } catch { return -1; } })();
-  const dbLabel = ({ 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' })[dbState] || 'unknown';
+  const dbLabel = 'Local JSON storage';
   return ctx.reply([
     '🩺 *RIZO BOT HEALTH*', '',
     `• Node.js: ${process.version}`, `• Uptime: ${Math.floor(seconds / 86400)}d ${Math.floor(seconds % 86400 / 3600)}h ${Math.floor(seconds % 3600 / 60)}m`,
     `• Process RAM: ${(mem.rss / 1048576).toFixed(1)} MB`, `• Heap used: ${(mem.heapUsed / 1048576).toFixed(1)} MB`,
-    `• Plugins: ${pluginCount}`, `• Active sockets: ${live}`, `• MongoDB: ${dbLabel}`,
+    `• Plugins: ${pluginCount}`, `• Active sockets: ${live}`, `• Storage: ${dbLabel}`,
     `• Pause flag: ${global.botPaused ? 'ON' : 'OFF'}`, `• Maintenance: ${global.maintenance ? 'ON' : 'OFF'}`
   ].join('\n'));
 });
