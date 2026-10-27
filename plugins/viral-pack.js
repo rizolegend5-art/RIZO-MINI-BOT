@@ -125,6 +125,7 @@ cmd({
 
 cmd({
     on: 'body',
+    allowUnprefixedInGroups: true,
     pattern: 'typingcheck',
     desc: 'Typing check',
     category: 'system',
@@ -159,6 +160,7 @@ cmd({
 
 cmd({
     on: 'body',
+    allowUnprefixedInGroups: true,
     pattern: 'reactioncheck',
     desc: 'Reaction check',
     category: 'system',
@@ -199,6 +201,7 @@ cmd({
 
 cmd({
     on: 'body',
+    allowUnprefixedInGroups: true,
     pattern: 'mathcheck',
     desc: 'Math check',
     category: 'system',
@@ -237,6 +240,7 @@ cmd({
 
 cmd({
     on: 'body',
+    allowUnprefixedInGroups: true,
     pattern: 'memorycheck',
     desc: 'Memory check',
     category: 'system',
@@ -281,6 +285,7 @@ cmd({
 
 cmd({
     on: 'body',
+    allowUnprefixedInGroups: true,
     pattern: 'triviacheck',
     desc: 'Trivia check',
     category: 'system',

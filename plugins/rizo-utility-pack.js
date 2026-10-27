@@ -1,6 +1,7 @@
 // RIZO HELL-MD — 10 lightweight utility commands
 // Keeps all features local; no API keys required.
 const { cmd } = require('../arslan');
+const { getUserConfigFromMongoDB } = require('../lib/database');
 const os = require('os');
 const config = require('../config');
 
@@ -32,7 +33,9 @@ cmd({ pattern:'botinfo', alias:['systeminfo','sysinfo'], desc:'Bot and host syst
 });
 cmd({ pattern:'owner', alias:['creator','dev'], desc:'Owner-only: show creator contact', category:'owner', react:'👑', filename:__filename }, async (conn, mek, m, ctx) => {
   if (!(ctx.isOwner || ctx.isCreator || ctx.isMe)) return ctx.reply('⛔ Owner only.');
-  const number = String(config.OWNER_NUMBER || config.OWNER_DISPLAY_NUMBER || ctx.botNumber || ctx.senderNumber || '').replace(/\D/g, '');
+  let savedOwnerConfig = {};
+  try { savedOwnerConfig = await getUserConfigFromMongoDB(String(ctx.botNumber || '')); } catch (_) {}
+  const number = String(config.OWNER_NUMBER || savedOwnerConfig.OWNER_DISPLAY_NUMBER || config.OWNER_DISPLAY_NUMBER || ctx.botNumber || ctx.senderNumber || '').replace(/\D/g, '');
   if (!number) return ctx.reply('❌ Owner number is not available for this session.');
   const target = ctx.sender || `${number}@s.whatsapp.net`;
   const vcard = [

@@ -15,23 +15,46 @@ const CONFIG = {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+function getCobaltConfig() {
+    const configuredUrl = String(process.env.COBALT_API_URL || '').trim();
+    if (!configuredUrl) return null;
+    try {
+        const base = new URL(configuredUrl);
+        if (!['https:', 'http:'].includes(base.protocol) || base.username || base.password) {
+            console.warn('[RIZO MUSIC] COBALT_API_URL must be an HTTP(S) instance URL without embedded credentials.');
+            return null;
+        }
+        base.pathname = '/';
+        base.search = '';
+        base.hash = '';
+        const headers = {};
+        if (process.env.COBALT_API_KEY) headers.Authorization = `Api-Key ${process.env.COBALT_API_KEY}`;
+        return { url: base.toString(), headers };
+    } catch (_) {
+        console.warn('[RIZO MUSIC] COBALT_API_URL is not a valid URL.');
+        return null;
+    }
+}
+
 // ═══════════════════════════════════════════
 //  MULTI-API AUDIO URL — 2026 working APIs
 // ═══════════════════════════════════════════
 async function getAudioUrl(youtubeUrl) {
     const enc = encodeURIComponent(youtubeUrl);
-    const videoId = extractVideoId(youtubeUrl);
+    const cobalt = getCobaltConfig();
 
     const apis = [
-        // 1. Cobalt API (open source, popular, working)
-        {
-            name: 'Cobalt',
+        // Use only a Cobalt instance the operator is authorized to access.
+        ...(cobalt ? [{
+            name: 'Cobalt (configured instance)',
             method: 'POST',
-            url: 'https://api.cobalt.tools/api/json',
-            data: { url: youtubeUrl, isAudioOnly: true, aFormat: 'mp3' },
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-            parse: d => d?.url ? { download: d.url, title: null } : null
-        },
+            url: cobalt.url,
+            data: { url: youtubeUrl, downloadMode: 'audio', audioFormat: 'mp3', audioBitrate: '320' },
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', ...cobalt.headers },
+            parse: d => ['tunnel', 'redirect'].includes(d?.status) && d?.url
+                ? { download: d.url, title: String(d.filename || '').replace(/\.(?:mp3|ogg|wav|opus)$/i, '') || null }
+                : null
+        }] : []),
         // 2. Loader.to (reliable)
         {
             name: 'Loader.to',

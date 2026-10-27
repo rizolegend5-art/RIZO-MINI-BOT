@@ -153,6 +153,7 @@ cmd({
 // Event handler: automatically inspect normal text messages in groups.
 cmd({
   on: 'body',
+  allowUnprefixedInGroups: true,
   dontAddCommandList: true,
   filename: __filename
 }, async (conn, mek, m, ctx) => {

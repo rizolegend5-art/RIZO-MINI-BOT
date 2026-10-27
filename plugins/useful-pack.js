@@ -191,36 +191,55 @@ cmd({
 cmd({
     pattern: 'currency',
     alias: ['exchangerate', 'forex'],
-    desc: 'Currency converter',
+    desc: 'Convert currency with latest reference rate',
     category: 'tools',
     react: '💱',
     use: '.currency 100 USD PKR',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    const parts = (ctx.q || '').toUpperCase().split(/\s+/);
-    if (parts.length < 4) return ctx.reply('Use: `.currency 100 USD PKR`');
+    const parts = (ctx.q || '').trim().toUpperCase().split(/\s+/).filter(Boolean);
+    if (parts.length !== 3 && !(parts.length === 4 && parts[2] === 'TO')) {
+        return ctx.reply('Use: `.currency 100 USD PKR` or `.currency 100 USD to PKR`');
+    }
 
-    const amount = parseFloat(parts[0]);
+    const amount = Number(parts[0]);
     const from = parts[1];
-    const to = parts[3];
+    const to = parts[parts.length - 1];
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000_000) {
+        return ctx.reply('❌ Amount positive aur 1 trillion se kam hona chahiye.');
+    }
+    if (!/^[A-Z]{3}$/.test(from) || !/^[A-Z]{3}$/.test(to)) {
+        return ctx.reply('❌ ISO currency codes use karo, jaise USD, EUR, PKR.');
+    }
 
-    if (!amount || !from || !to) return ctx.reply('❌ Invalid format.');
+    if (from === to) {
+        return ctx.reply(`💱 *CURRENCY CONVERTER*\n\n${amount.toLocaleString('en-US')} ${from} = *${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${to}*\n\n📊 Same currency — conversion rate 1.`);
+    }
 
     try {
-        const r = await axios.get(`https://api.exchangerate-api.com/v4/latest/${from}`, { timeout: 10000 });
-        const rate = r.data.rates[to];
-        if (!rate) return ctx.reply('❌ Currency not found.');
-
-        const result = (amount * rate).toFixed(2);
+        const r = await axios.get('https://api.frankfurter.dev/v2/rates', {
+            params: { base: from, quotes: to },
+            timeout: 12000
+        });
+        const quote = Array.isArray(r.data) ? r.data.find(item => item.base === from && item.quote === to) : null;
+        if (!quote || !Number.isFinite(Number(quote.rate))) {
+            return ctx.reply('❌ Is pair ka rate available nahi. Currency codes check karo.');
+        }
+        const rate = Number(quote.rate);
+        const result = amount * rate;
         return ctx.reply([
             '💱 *CURRENCY CONVERTER*',
             '',
-            `💰 ${amount} ${from}`,
-            `= *${result} ${to}*`,
+            `💰 ${amount.toLocaleString('en-US')} ${from}`,
+            `= *${result.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${to}*`,
+            `📊 1 ${from} = ${rate.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${to}`,
+            `📅 Rate date: ${quote.date || 'latest available'}`,
             '',
-            `📊 Rate: 1 ${from} = ${rate} ${to}`
+            '_Reference rate; exchange-provider fees and live prices may differ._'
         ].join('\n'));
-    } catch (e) { return ctx.reply('❌ Conversion fail.'); }
+    } catch (e) {
+        return ctx.reply('❌ Currency service abhi available nahi. Thori dair baad try karo.');
+    }
 });
 
 // 9. GOLDRATE — Gold/silver rate (Pakistan)
