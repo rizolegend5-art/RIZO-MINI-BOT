@@ -17,9 +17,9 @@ module.exports = {
     // ===========================================================
     PREFIX: process.env.PREFIX || ".",
     // Optional extra owner numbers. The connected WhatsApp account is also an owner.
-    OWNER_NUMBER: process.env.OWNER_NUMBER || "",
-    OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || process.env.OWNER_NUMBER || "",
-    OWNER_NUMBERS: (process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || "").split(",").map(n => n.trim()).filter(Boolean),
+    OWNER_NUMBER: process.env.OWNER_NUMBER || "03497507427",
+    OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || process.env.OWNER_NUMBER || "03497081205",
+    OWNER_NUMBERS: (process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || "03497507427").split(",").map(n => n.trim()).filter(Boolean),
 
     DEFAULT_COUNTRY_CODE: process.env.DEFAULT_COUNTRY_CODE || "92",
     FORCE_CHANNEL_1: process.env.FORCE_CHANNEL_1 || "https://whatsapp.com/channel/0029Vb8Hsxs72WU1Dx57eu1q",
