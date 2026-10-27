@@ -2,187 +2,119 @@ const { cmd, commands } = require("../arslan");
 const moment = require("moment-timezone");
 const config = require("../config");
 
-const MENU_IMAGE = "https://files.catbox.moe/9ykuur.jpg";
-const CHANNEL_URL = "https://whatsapp.com/channel/0029VbDklK7Jf05XGSBuTc0u";
-
-const CATEGORY_ICONS = {
-    admin: "🛡️",
-    adult: "🔞",
-    anime: "🎌",
-    download: "📥",
-    downloader: "📥",
-    emotions: "💛",
-    fun: "🎮",
-    games: "🎮",
-    general: "✨",
-    group: "👥",
-    image: "🖼️",
-    islamic: "🕌",
-    love: "💞",
-    main: "⚡",
-    misc: "📌",
-    music: "🎵",
-    owner: "👑",
-    premium: "💠",
-    search: "🔎",
-    settings: "⚙️",
-    sticker: "🎨",
-    system: "🤖",
-    tools: "🧰",
-    utility: "🧮"
-};
-
-const CATEGORY_ORDER = [
-    "main", "general", "download", "downloader",
-    "music", "search", "tools", "utility",
-    "group", "admin", "settings", "owner",
-    "islamic", "anime", "sticker", "image",
-    "premium", "system", "fun", "games",
-    "love", "emotions", "misc", "adult"
-];
+const UPDATE_CHANNEL_JID = " 120363412624902256@newsletter";
+const UPDATE_CHANNEL_NAME = "📢 RIZO-X AMAN MD UPDATES";
 
 cmd({
     pattern: "menu",
     alias: ["commandlist", "allmenu", "help"],
-    desc: "Show all commands with menu image",
+    desc: "All bot commands",
     category: "system",
     react: "📋",
-    filename: __filename
+    filename: __filename,
 }, async (conn, mek, m, ctx) => {
     try {
         const from = ctx.from || m.chat;
-        const prefix = String(config.PREFIX || ".");
-        const botName = config.BOT_NAME || "RIZO X AMAN MINI BOT";
+        let totalCommands = 0;
+        const grouped = {};
+        const seen = new Set();
 
-        // Collect unique registered commands.
-        const uniqueCommands = new Map();
-
-        for (const item of commands) {
-            if (
-                !item.pattern ||
-                !item.category ||
-                item.dontAddCommandList
-            ) continue;
-
-            const pattern = String(item.pattern).toLowerCase();
-            const category = String(item.category).toLowerCase();
-
-            if (!uniqueCommands.has(pattern)) {
-                uniqueCommands.set(pattern, { pattern, category });
-            }
+        for (const cmd of commands) {
+            if (!cmd.pattern || !cmd.category || cmd.dontAddCommandList) continue;
+            const key = `${cmd.category.toLowerCase()}:${cmd.pattern.toLowerCase()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            totalCommands++;
+            if (!grouped[cmd.category.toLowerCase()]) grouped[cmd.category.toLowerCase()] = [];
+            grouped[cmd.category.toLowerCase()].push(cmd.pattern);
         }
 
-        const allCommands = [...uniqueCommands.values()];
-        const grouped = new Map();
+        const icons = {
+            admin: '⚙️', adult: '🔞', download: '📥', downloader: '📥',
+            fun: '🎮', general: '💎', group: '👥', islamic: '🕌',
+            main: '⚡', menu: '📋', owner: '👑', premium: '💠',
+            settings: '🔧', sticker: '🎨', system: '💻', tools: '🛠️',
+            music: '🎵', image: '🖼️', referrals: '🔗', misc: '📌',
+            search: '🔍', utility: '⚡', anime: '🎌'
+        };
 
-        for (const item of allCommands) {
-            if (!grouped.has(item.category)) {
-                grouped.set(item.category, []);
-            }
-
-            grouped.get(item.category).push(item.pattern);
-        }
-
-        // Sort commands inside each category.
-        for (const list of grouped.values()) {
-            list.sort((a, b) => a.localeCompare(b));
-        }
-
-        // Show categories in the preferred order.
-        const categories = [...grouped.keys()].sort((a, b) => {
-            const ai = CATEGORY_ORDER.indexOf(a);
-            const bi = CATEGORY_ORDER.indexOf(b);
-
-            if (ai === -1 && bi === -1) {
-                return a.localeCompare(b);
-            }
-
-            if (ai === -1) return 1;
-            if (bi === -1) return -1;
-
-            return ai - bi;
-        });
-
-        const time = moment()
-            .tz("Asia/Karachi")
-            .format("ddd, D MMM YYYY · hh:mm A");
-
-        const lines = [
-            `╭━━━〔 👑 *${botName}* 〕━━━╮`,
-            `┃ ⚡ Total Commands: *${allCommands.length}*`,
-            `┃ 🔰 Prefix: *${prefix}*`,
-            `┃ 🕒 ${time} PKT`,
-            `╰━━━━━━━━━━━━━━━━━━╯`,
-            "",
-            "✨ *ALL COMMANDS*",
-            ""
+        const order = [
+            'premium', 'owner', 'admin', 'group', 'download', 'downloader',
+            'music', 'islamic', 'fun', 'anime', 'tools', 'image', 'sticker',
+            'settings', 'general', 'main', 'system', 'search', 'utility',
+            'misc', 'referrals'
         ];
 
-        // All commands in one categorized list, without pagination.
-        for (const category of categories) {
-            const icon = CATEGORY_ICONS[category] || "📂";
-            const list = grouped.get(category);
+        const time = moment().tz("Asia/Karachi").format("HH:mm:ss");
+        const date = moment().tz("Asia/Karachi").format("dddd, MMMM Do YYYY");
+        const ownerDisplay = config.OWNER_DISPLAY_NUMBER || config.OWNER_NUMBER;
 
-            lines.push(
-                `${icon} *${category.toUpperCase()}* (${list.length})`
-            );
+        let menuText = '';
 
-            lines.push(
-                list.map(name => `${prefix}${name}`).join("  ·  ")
-            );
+        // Header
+        menuText += `╭━━━━━━━━━━━━━━━━━⊷\n`;
+        menuText += `┃  《 *${config.BOT_NAME || 'RIZO X AMAN-MD'}* 》\n`;
+        menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
+        menuText += `┃ ✦ *Commands* : ${totalCommands}\n`;
+        menuText += `┃ ✦ *Time*     : ${time}\n`;
+        menuText += `┃ ✦ *Date*     : ${date}\n`;
+        menuText += `┃ ✦ *Owner*    : ${ownerDisplay}\n`;
+        menuText += `┃ ✦ *Prefix*   : 『 ${config.PREFIX} 』\n`;
+        menuText += `┃ ✦ *Mode*     : 〔 ${(config.WORK_TYPE || 'public').toUpperCase()} 〕\n`;
+        menuText += `╰━━━━━━━━━━━━━━━━━⊷\n\n`;
 
-            lines.push("");
+        // Premium
+        menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
+        menuText += `┃ 💠 *PREMIUM* 💠\n`;
+        menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
+        menuText += `┃ ✧ ${config.PREFIX}botscript\n`;
+        menuText += `┃ ✧ ${config.PREFIX}bugbotscript\n`;
+        menuText += `┃ ✧ ${config.PREFIX}promo\n`;
+        menuText += `┃ ✧ ${config.PREFIX}myref\n`;
+        menuText += `┗━━━━━━━━━━━━━━━━━⊷\n\n`;
+
+        const renderCategory = (cat) => {
+            if (!grouped[cat] || !grouped[cat].length) return '';
+            const icon = icons[cat] || '📌';
+            const cmds = [...new Set(grouped[cat])].sort();
+            let out = `┏━━━━━━━━━━━━━━━━━⊷\n`;
+            out += `┃ ${icon} *${cat.toUpperCase()}*\n`;
+            out += `┣━━━━━━━━━━━━━━━━━⊷\n`;
+            for (const c of cmds) out += `┃ ✧ ${config.PREFIX}${c}\n`;
+            out += `┗━━━━━━━━━━━━━━━━━⊷\n\n`;
+            return out;
+        };
+
+        for (const cat of order) menuText += renderCategory(cat);
+        for (const cat of Object.keys(grouped).sort()) {
+            if (!order.includes(cat)) menuText += renderCategory(cat);
         }
 
-        lines.push("╭━━━━━━━━━━━━━━━━━━╮");
-        lines.push(`┃ 👑 *${botName}*`);
-        lines.push("┃ 📢 Official Channel: View Channel button");
-        lines.push("╰━━━━━━━━━━━━━━━━━━╯");
+        menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
+        menuText += `┃ © ᴘᴏᴡᴇʀᴇᴅ ʙʏ *${config.BOT_NAME || 'RIZO X AMAN -MD'}*\n`;
+        menuText += `┗━━━━━━━━━━━━━━━━━⊷`;
 
-        const menuText = lines.join("\n");
-
-        // Send the menu image first.
-        await conn.sendMessage(
-            from,
-            {
-                image: { url: MENU_IMAGE },
-                caption:
-                    `👑 *${botName}*\n\n` +
-                    `⚡ Commands: ${allCommands.length}\n` +
-                    `🔰 Prefix: ${prefix}\n` +
-                    `🕒 ${time} PKT\n\n` +
-                    `✨ All commands neeche dekhein.`
-            },
-            { quoted: mek }
-        );
-
-        // Send all categorized commands with the channel button.
-        return await conn.sendMessage(
-            from,
-            {
-                text: menuText,
-                footer: `${botName} • Official WhatsApp Channel`,
-                templateButtons: [
-                    {
-                        index: 1,
-                        urlButton: {
-                            displayText: "📢 VIEW CHANNEL",
-                            url: CHANNEL_URL
-                        }
-                    }
-                ],
-                headerType: 1
-            },
-            { quoted: mek }
-        );
-
-    } catch (err) {
-        console.error("RIZO Menu Error:", err);
+        const contextInfo = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+                newsletterJid: UPDATE_CHANNEL_JID,
+                newsletterName: UPDATE_CHANNEL_NAME,
+                serverMessageId: 100
+            }
+        };
 
         try {
-            await ctx.reply(
-                "❌ Menu send nahi ho saka. Baad mein dobara try karo."
-            );
-        } catch (_) {}
+            await conn.sendMessage(from, {
+                image: { url: config.IMAGE_PATH },
+                caption: menuText,
+                contextInfo
+            }, { quoted: mek });
+        } catch (imgErr) {
+            await conn.sendMessage(from, { text: menuText, contextInfo }, { quoted: mek });
+        }
+    } catch (err) {
+        console.error("AllMenu Error:", err);
+        try { await ctx.reply("❌ Menu error."); } catch (_) {}
     }
 });
