@@ -150,6 +150,8 @@ Useful environment variables:
 - `OWNER_NUMBER` / `OWNER_NUMBERS` — optional configured owner contact(s).
 - `OWNER_DISPLAY_NUMBER` — optional owner-only display value; the public menu does not show owner numbers.
 - `MONGODB_URI` — database connection for sessions and settings.
+- `COBALT_API_URL` — optional URL for a Cobalt instance you own or are authorized to use; the bot no longer calls the public Cobalt endpoint by default.
+- `COBALT_API_KEY` — optional Cobalt instance key; store it as a private deployment secret.
 - `RIZO_PANEL_TOKEN` — optional private monitoring panel token.
 - `ALYACHAN_API_KEY` — optional audio-download fallback key.
 - `ISLAMIC_DL_API_KEY` — optional key for the Islamic video-download provider.
@@ -159,3 +161,10 @@ Run `npm install`, set environment variables in your hosting provider's secret s
 Duplicate command registrations now resolve to one canonical command instead of exposing plugin filenames in the menu. The menu puts everyday commands first and fun/emotion commands later. The ping command sends one result message, and song playback sends its thumbnail before attempting the audio download.
 
 Third-party downloader/API availability and live WhatsApp behavior depend on the deployment environment. Source checks do not guarantee those external services are online.
+
+## Utility commands and menu
+
+- `.menu` opens the compact command dashboard; `.menu tools 2` opens a category page and `.menu all 2` browses every listed command. Existing command aliases still work.
+- `.currency 100 USD PKR` converts using the latest published reference rate.
+- `.define serendipity` looks up an English definition.
+- `.unit 10 km mi` converts length, weight, or temperature without an external API.

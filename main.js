@@ -289,7 +289,7 @@ function getConnectionStatus(number) {
 function arslanLog(message, type = 'info') {
     const icons = { info: '📝', success: '✅', error: '❌', warning: '⚠️', debug: '🐛' };
     const timestamp = new Date().toISOString();
-    console.log(`${icons[type] || '📝'} [RIZO-MD] ${timestamp}: ${message}`);
+    console.log(`${icons[type] || '📝'} [RIZO X AMAN-MD] ${timestamp}: ${message}`);
     addPanelLog(type, message);
 }
 
@@ -457,7 +457,7 @@ async function arslanPair(number, res = null) {
             browser: Browsers.ubuntu('Chrome'),
             getMessage: async (key) => {
                 const msg = await arslanStore.loadMessage(key.remoteJid, key.id);
-                return msg && msg.message ? msg.message : { conversation: 'RIZO-MD' };
+                return msg && msg.message ? msg.message : { conversation: 'RIZO X AMAN-MD' };
             }
         });
 
@@ -577,7 +577,7 @@ async function arslanPair(number, res = null) {
                     try {
                         await conn.sendMessage(userJid, {
                             image: { url: config.IMAGE_PATH },
-                            caption: `\n╭────────────────────◇\n│✦ *${config.BOT_NAME || 'RIZO Mini Bot'} — CONNECTED* 🔥\n│✦ Type *${prefix}menu* to see all commands 💫\n│✦ Prefix 『 ${prefix} 』  Mode 〔${mode}〕\n╰────────────────────○\n${config.BOT_FOOTER || `© Powered by ${config.BOT_NAME || 'RIZO Mini Bot'}`}`
+                            caption: `\n╭────────────────────◇\n│✦ *${config.BOT_NAME || 'RIZO X AMAN-MD Bot'} — CONNECTED* 🔥\n│✦ Type *${prefix}menu* to see all commands 💫\n│✦ Prefix 『 ${prefix} 』  Mode 〔${mode}〕\n╰────────────────────○\n${config.BOT_FOOTER || `© Powered by ${config.BOT_NAME || 'RIZO X AMAN-MD Bot'}`}`
                         });
                     } catch (e) {
                         arslanLog(`Greeting send failed: ${e.message}`, 'warning');
@@ -718,9 +718,9 @@ async function arslanPair(number, res = null) {
                 const myquoted = {
                     key: { remoteJid: 'status@broadcast', participant: '13135550002@s.whatsapp.net', fromMe: false, id: createSerial(16).toUpperCase() },
                     message: { contactMessage: {
-                        displayName: '© RIZO-MD',
-                        vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:RIZO-MD BOY\nORG:RIZO-MD BOY;\nTEL;type=CELL;type=VOICE;waid=13135550002:13135550002\nEND:VCARD`,
-                        contextInfo: { stanzaId: createSerial(16).toUpperCase(), participant: '0@s.whatsapp.net', quotedMessage: { conversation: '© RIZO-MD' } }
+                        displayName: '© RIZO X AMAN-MD',
+                        vcard: `BEGIN:VCARD\nVERSION:3.0\RIZO X AMAN-MD BOY\nORG:RIZO X AMAN-MD BOY;\nTEL;type=CELL;type=VOICE;waid=13135550002:13135550002\nEND:VCARD`,
+                        contextInfo: { stanzaId: createSerial(16).toUpperCase(), participant: '0@s.whatsapp.net', quotedMessage: { conversation: '© RIZO X AMAN-MD' } }
                     }},
                     messageTimestamp: Math.floor(Date.now() / 1000),
                     status: 1, verifiedBizName: 'Meta'
@@ -764,6 +764,11 @@ async function arslanPair(number, res = null) {
                 if (isGroup) await incrementStats(sanitizedNumber, 'groupsInteracted');
 
                 for (const evCmd of events.commands) {
+                    // Group chatter is ignored by default. Event-only handlers
+                    // must explicitly opt in when they need unprefixed replies
+                    // (for example, an active game answer or AntiLink moderation).
+                    if (isGroup && !isCmd && evCmd.allowUnprefixedInGroups !== true) continue;
+
                     const ctx = {
                         from, l, quoted: mek, body, isCmd, command, args, q, text,
                         isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
@@ -787,7 +792,7 @@ async function arslanPair(number, res = null) {
         });
 
     } catch (err) {
-        arslanLog(`RIZO-MD Pair error: ${err.message}`, 'error');
+        arslanLog(`RIZO X AMAN-MD Pair error: ${err.message}`, 'error');
         if (res && !res.headersSent) return res.json({ error: 'Internal Server Error', details: err.message });
     } finally {
         if (connectionLockKey) global[connectionLockKey] = false;
@@ -801,7 +806,7 @@ router.get('/panel', (req, res) => res.sendFile(path.join(__dirname, 'panel.html
 
 router.get('/api/health', (req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ ok: true, service: 'RIZO Mini Bot', timestamp: new Date().toISOString() });
+    res.json({ ok: true, service: 'RIZO X AMAN-MD Bot', timestamp: new Date().toISOString() });
 });
 
 router.get('/api/panel/metrics', requirePanelAuth, (req, res) => {
@@ -817,7 +822,7 @@ router.get('/api/panel/metrics', requirePanelAuth, (req, res) => {
     });
     res.set('Cache-Control', 'no-store');
     res.json({
-        service: 'RIZO Mini Bot',
+        service: 'RIZO X AMAN-MD Bot',
         status: 'online',
         timestamp: new Date().toISOString(),
         processUptimeSeconds: Math.floor(process.uptime()),
@@ -875,7 +880,7 @@ router.get('/disconnect', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Failed to disconnect' }); }
 });
 router.get('/active', (req, res) => { const nums = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected); res.json({ count: nums.length, numbers: nums }); });
-router.get('/ping', (req, res) => res.json({ status: 'active', message: 'RIZO-md is running 🔥', activeSessions: activeSockets.size }));
+router.get('/ping', (req, res) => res.json({ status: 'active', message: 'RIZO X AMAN-MD is running 🔥', activeSessions: activeSockets.size }));
 router.get('/connect-all', async (req, res) => {
     try {
         const numbers = await getAllNumbersFromMongoDB();
@@ -901,7 +906,7 @@ router.get('/update-config', async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     await saveOTPToMongoDB(n, otp, newConfig);
     try {
-        await socket.sendMessage(jidNormalizedUser(socket.user.id), { text: `*🔐 RIZO-MD — CONFIG UPDATE*\n\nOTP: *${otp}*\nValid 5 minutes` });
+        await socket.sendMessage(jidNormalizedUser(socket.user.id), { text: `*🔐 RIZO X AMAN-MD — CONFIG UPDATE*\n\nOTP: *${otp}*\nValid 5 minutes` });
         res.json({ status: 'otp_sent' });
     } catch (e) { res.status(500).json({ error: 'Failed to send OTP' }); }
 });

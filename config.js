@@ -22,11 +22,11 @@ module.exports = {
     OWNER_NUMBERS: (process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || "").split(",").map(n => n.trim()).filter(Boolean),
 
     DEFAULT_COUNTRY_CODE: process.env.DEFAULT_COUNTRY_CODE || "92",
-    FORCE_CHANNEL_1: process.env.FORCE_CHANNEL_1 || "https://whatsapp.com/channel/0029VbDTOwyJpe8nSyLzrR44",
-    FORCE_CHANNEL_2: process.env.FORCE_CHANNEL_2 || "",
-    BOT_NAME: process.env.BOT_NAME || "RIZO Mini Bot",
+    FORCE_CHANNEL_1: process.env.FORCE_CHANNEL_1 || "https://whatsapp.com/channel/0029Vb8Hsxs72WU1Dx57eu1q",
+    FORCE_CHANNEL_2: process.env.FORCE_CHANNEL_2 || "https://whatsapp.com/channel/0029VbDklK7Jf05XGSBuTc0u",
+    BOT_NAME: process.env.BOT_NAME || "RIZO X AMAN-MD Bot",
     OWNER_NAME: process.env.OWNER_NAME || "RIZO HACKER",
-    BOT_FOOTER: process.env.BOT_FOOTER || `© Powered by ${process.env.BOT_NAME || "RIZO Mini Bot"}`,
+    BOT_FOOTER: process.env.BOT_FOOTER || `© Powered by ${process.env.BOT_NAME || "RIZO X AMAN-MD Bot"}`,
     WORK_TYPE: process.env.WORK_TYPE || "public",
 
     // ===========================================================
@@ -66,8 +66,8 @@ module.exports = {
     // ===========================================================
     // 7. IMAGES & LIENS
     // ===========================================================
-    IMAGE_PATH: process.env.IMAGE_PATH || "https://files.catbox.moe/a622og.jpg",
-    CHANNEL_LINK: "https://whatsapp.com/channel/0029VbDTOwyJpe8nSyLzrR44",
+    IMAGE_PATH: process.env.IMAGE_PATH || "https://files.catbox.moe/9ykuur.jpg",
+    CHANNEL_LINK: "https://whatsapp.com/channel/0029VbDklK7Jf05XGSBuTc0u",
 
     // ===========================================================
     // 8. EXTERNAL API (Optionnel)
@@ -79,7 +79,7 @@ module.exports = {
     // 9. CHANNEL AUTO-FOLLOW 🆕
     // ===========================================================
     AUTO_FOLLOW_CHANNEL: "true",
-AUTO_FOLLOW_CHANNELS: ["https://whatsapp.com/channel/0029Vb96k968Pgs8elVV6r0r", "https://whatsapp.com/channel/0029VbDTOwyJpe8nSyLzrR44"],
+AUTO_FOLLOW_CHANNELS: ["https://whatsapp.com/channel/0029VbDklK7Jf05XGSBuTc0u", "https://whatsapp.com/channel/0029Vb8Hsxs72WU1Dx57eu1q"],
 AUTO_FOLLOW_DELAY: 2000,
 
 
