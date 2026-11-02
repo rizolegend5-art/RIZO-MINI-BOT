@@ -3,7 +3,7 @@
 // Railway / Render
 // ============================================
 
-const { cmd } = require('../arslan');
+const { cmd } = require('../command');
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');

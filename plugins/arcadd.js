@@ -1,6 +1,6 @@
 // plugins/arcadd.js — Config-based (no MongoDB)
 
-const { cmd } = require('../arslan');
+const { cmd } = require('../command');
 const config = require('../config');
 const { isPremiumUser } = require('../lib/premium-check');
 
@@ -18,16 +18,19 @@ function parseChannelPost(value) {
     return { jid: `${channelId}@newsletter`, postId };
 }
 
+// Helper to delay between reactions to avoid rate limits
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 // ═══════════════════════════════════════════
-//  .arcadd — channel reaction
+//  .arcadd — multiple channel reactions
 // ═══════════════════════════════════════════
 cmd({
     pattern: 'arcadd',
-    alias: ['channelreact', 'chreact', 'reactch'],
-    desc: 'React to a channel post with emoji(s)',
+    alias: ['channelreact', 'reactch', 'multireact'],
+    desc: 'React to a channel post with multiple emojis',
     category: 'premium',
     react: '💗',
-    use: '.arcadd <channel-post-link> ❤️ 🔥',
+    use: '.arcadd <channel-post-link> ❤️ 🔥 🚀',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     if (!await isPremiumUser(ctx)) {
@@ -35,7 +38,7 @@ cmd({
     }
 
     const q = (ctx.q || '').trim();
-    if (!q) return ctx.reply(`Use: ${config.PREFIX}arcadd <channel-link> ❤️ 🔥`);
+    if (!q) return ctx.reply(`Use: ${config.PREFIX}arcadd <channel-link> ❤️ 🔥 🚀`);
 
     const parts = q.replace(/[,،]+/g, ' ').split(/\s+/).filter(Boolean);
     const parsed = parseChannelPost(parts[0]);
@@ -45,25 +48,38 @@ cmd({
 
     let emojis = [...new Set(parts.slice(1))];
     if (!emojis.length) emojis = [DEFAULT_REACTION_EMOJI];
-    if (emojis.length > 30) return ctx.reply('⚠️ Max 30 emojis.');
+    if (emojis.length > 30) return ctx.reply('⚠️ Max 30 emojis allow hain.');
 
     if (typeof conn.newsletterReactMessage !== 'function') {
-        return ctx.reply('❌ Baileys version mein channel reaction API nahi hai.');
+        return ctx.reply('❌ Baileys version mein channel reaction API available nahi hai.');
     }
 
-    const succeeded = [], failed = [];
+    await ctx.reply(`⏳ Sending ${emojis.length} reactions to the channel post...`);
+
+    const succeeded = [];
+    const failed = [];
+
+    // Har reaction ke darmiyan proper delay taake WhatsApp API block na kare
     for (const emoji of emojis) {
         try {
             await conn.newsletterReactMessage(parsed.jid, parsed.postId, emoji);
             succeeded.push(emoji);
+            await sleep(500); // 0.5 sec delay per reaction
         } catch (e) {
-            failed.push(`${emoji} (${e.message?.slice(0, 50)})`);
+            failed.push(`${emoji}`);
         }
-        if (emojis.length > 1) await new Promise(r => setTimeout(r, 350));
     }
 
-    let reply = `🎯 *CHANNEL REACTION RESULT*\n\n📌 Post: ${parsed.postId}\n✅ Success: ${succeeded.length}/${emojis.length}`;
-    if (succeeded.length) reply += `\n✨ ${succeeded.join(' ')}`;
-    if (failed.length) reply += `\n\n❌ Failed: ${failed.join(' ')}`;
-    return ctx.reply(reply);
+    let replyText = `🎯 *CHANNEL MULTI-REACTION RESULT*\n\n`;
+    replyText += `📌 Post ID: \`${parsed.postId}\`\n`;
+    replyText += `✅ Success: *${succeeded.length}/${emojis.length}*\n`;
+    
+    if (succeeded.length) {
+        replyText += `✨ Emojis: ${succeeded.join(' ')}\n`;
+    }
+    if (failed.length) {
+        replyText += `❌ Failed: ${failed.join(' ')}`;
+    }
+
+    return ctx.reply(replyText);
 });

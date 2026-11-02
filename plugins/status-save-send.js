@@ -1,4 +1,4 @@
-const { cmd } = require("../arslan");
+const { cmd } = require("../command");
 
 const commandKeywords = [
   "send", "sendme", "send me", "give me", "bhejo", "bhej do", "bhejdo",

@@ -1,4 +1,4 @@
-const { cmd } = require('../arslan');
+const { cmd } = require('../command');
 
 // Fun group command: mentions current group members only.
 cmd({
