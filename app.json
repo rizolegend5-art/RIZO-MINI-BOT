@@ -1,18 +1,27 @@
 {
-  "name": "RIZO X AMAN Mini Bot",
-  "description": "SESSION ID GENERATOR FOR WHATSAPP BOTS",
-  "logo": "https://files.catbox.moe/9ykuur.jpg",
-  "repository": "https://github.com/rizolegend5-art/RIZO-MINI-BOT",
-  "keywords": ["@RIZO-MD"],
-  "success_url": "/", 
-  "buildpacks": [
-    { "url": "https://github.com/heroku/heroku-buildpack-nodejs#latest" }
-  ],
-  "env": {      
-    "MESSAGE": {
-      "description": "Msg Attached With Session ID",
-      "value": "RIZO Mini Bot",
-      "required": false 
+  "name": "rizo-smd",
+  "description": "Javascript WhatsApp bot made by rizo-smd",
+  "logo": "https://files.catbox.moe/kvjcgy.jpg",
+  "keywords": ["raza-smd"],
+  "success_url": "/",
+  "stack": "container",
+
+  "env": {
+    "MONGODB_URL": {
+      "description": "MongoDB connection string for database storage",
+      "required": false
+    },
+    "DB_NAME": {
+      "description": "Database name for MongoDB (default: raza-smd)",
+      "required": false,
+      "value": "adeel-md"
     }
-  }
+  },
+
+  "buildpacks": [
+    {
+      "url": "https://github.com/heroku/heroku-buildpack-nodejs.git"
+    }
+  ],
+  "stack": "heroku-24"
 }
