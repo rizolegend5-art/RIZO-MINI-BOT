@@ -1,5 +1,6 @@
 const { cmd } = require('../arslan');
 const axios = require('axios');
+const mediaDl = require('../lib/media-dl');
 
 cmd({
   pattern: "fb",
@@ -11,6 +12,19 @@ cmd({
   try {
     if (!q) return reply("*AP NE KOI FACEBOOK VIDEO DOWNLOAD KARNI HAI 🤔 TO AP US FACEBOOK VIDEO KA LINK COPY KAR LO 🤗*\n*PHIR ESE LIKHO ☺️*\n\n*FB ❮FACEBOOK VIDEO LINK❯*\n\n*JAB AP ESE LIKHO GE 😇 TO APKI FACEBOOK VIDEO DOWNLOAD KAR KE 😃 YAHA PER BHEJ DE JAYE GE 😍♥️*");
 
+    // 1) LOCAL (no API) via yt-dlp
+    try {
+      const local = await mediaDl.downloadAnyVideo(q.trim());
+      return await conn.sendMessage(from, {
+        video: local.buffer,
+        mimetype: "video/mp4",
+        caption: "*👑 FB VIDEO 👑*\n*👑 BY :❯ RIZO-MD 👑*"
+      }, { quoted: mek });
+    } catch (localErr) {
+      console.warn('[FB] local download failed, trying API:', localErr.message);
+    }
+
+    // 2) fallback: public API
     const apiUrl = `https://movanest.xyz/v2/fbdown?url=${encodeURIComponent(q)}`;
     const res = await axios.get(apiUrl);
     const data = res.data;

@@ -14,7 +14,6 @@ cmd({ pattern: 'ownerhelp', alias: ['ownercommands', 'ohhelp'], desc: 'Owner: li
     '👑 *RIZO HELL-MD — OWNER COMMANDS*', '',
     '*Dashboard & health*', '• .ownerhub — dashboard', '• .bothealth — runtime health', '• .pluginscan — plugin file scan', '• .usagestats — command/category stats', '',
     '*Control*', '• .botpause / .botresume', '• .maintenance on/off', '• .botnotice <text|clear>', '• .setprefix !', '• .restart', '',
-    '*Premium*', '• .promo <code> [maxUses] [expiresHours] [premiumDays]', '• .promolist', '• .delpromo <code>', '• .premiumlookup <number>', '',
     '*Messaging*', '• .sendto <number> <message>', '• .broadcast2 <message> (groups)', '• .forwardall (reply to a message)', '',
     '⚠️ Use broadcast tools only for appropriate chats and avoid unsolicited bulk messages.'
   ].join('\n'));
@@ -29,12 +28,13 @@ cmd({ pattern: 'bothealth', alias: ['healthcheck', 'rizohealth'], desc: 'Owner: 
   try { pluginCount = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js')).length; } catch {}
   const sockets = global.activeSockets instanceof Map ? global.activeSockets : new Map();
   const live = [...sockets.values()].filter(s => s && s.user).length;
-  const dbLabel = 'Local JSON storage';
+  const dbState = (() => { try { return require('mongoose').connection.readyState; } catch { return -1; } })();
+  const dbLabel = ({ 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' })[dbState] || 'unknown';
   return ctx.reply([
     '🩺 *RIZO BOT HEALTH*', '',
     `• Node.js: ${process.version}`, `• Uptime: ${Math.floor(seconds / 86400)}d ${Math.floor(seconds % 86400 / 3600)}h ${Math.floor(seconds % 3600 / 60)}m`,
     `• Process RAM: ${(mem.rss / 1048576).toFixed(1)} MB`, `• Heap used: ${(mem.heapUsed / 1048576).toFixed(1)} MB`,
-    `• Plugins: ${pluginCount}`, `• Active sockets: ${live}`, `• Storage: ${dbLabel}`,
+    `• Plugins: ${pluginCount}`, `• Active sockets: ${live}`, `• MongoDB: ${dbLabel}`,
     `• Pause flag: ${global.botPaused ? 'ON' : 'OFF'}`, `• Maintenance: ${global.maintenance ? 'ON' : 'OFF'}`
   ].join('\n'));
 });
@@ -56,19 +56,5 @@ cmd({ pattern: 'pluginscan', alias: ['plugincheck'], desc: 'Owner: list plugin f
   } catch (e) { return ctx.reply(`❌ Plugin scan failed: ${e.message}`); }
 });
 
-cmd({ pattern: 'premiumlookup', alias: ['premcheck'], desc: 'Owner: check a user premium grant', category: 'owner', react: '💎', use: '.premiumlookup <number>', filename: __filename }, async (conn, mek, m, ctx) => {
-  if (!ownerOnly(ctx)) return deny(ctx);
-  const number = cleanNumber(ctx.q);
-  if (!number || number.length < 10) return ctx.reply('Use: .premiumlookup 923XXXXXXXXX');
-  try {
-    const manual = await PromoPremium.findOne({ number }).lean();
-    const activeManual = Boolean(manual && (!manual.expiresAt || new Date(manual.expiresAt) > new Date()));
-    return ctx.reply([
-      '💎 *PREMIUM USER LOOKUP*', '', `• Number: ${number}`,
-      `• Premium: ${activeManual ? 'ACTIVE' : 'INACTIVE'}`,
-      `• Expiry: ${manual?.expiresAt ? new Date(manual.expiresAt).toLocaleString() : 'N/A'}`
-    ].join('\n'));
-  } catch (e) { return ctx.reply(`❌ Premium lookup failed: ${e.message}`); }
-});
 
 console.log('[RIZO] Extra owner panel commands loaded');

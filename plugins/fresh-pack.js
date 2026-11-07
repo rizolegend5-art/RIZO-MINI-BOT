@@ -6,6 +6,24 @@ const axios = require('axios');
 // ===========================================================
 // 1. FAKECHAT — Fake WhatsApp chat banao
 // ===========================================================
+
+// source.unsplash.com is discontinued -> keyless replacements
+async function fetchKeywordImage(keyword) {
+    const kw = encodeURIComponent(String(keyword || 'nature').trim().replace(/\s+/g, ','));
+    const urls = [
+        `https://loremflickr.com/800/600/${kw}?lock=${Date.now() % 100000}`,
+        `https://picsum.photos/800/600?random=${Date.now()}`
+    ];
+    let last;
+    for (const u of urls) {
+        try {
+            const r = await axios.get(u, { responseType: 'arraybuffer', timeout: 15000, maxRedirects: 5 });
+            if (r.data && r.data.length > 3000) return Buffer.from(r.data);
+        } catch (e) { last = e; }
+    }
+    throw last || new Error('IMAGE_FETCH_FAILED');
+}
+
 cmd({
     pattern: 'fakechat',
     alias: ['chatmaker'],
@@ -230,12 +248,9 @@ cmd({
 }, async (conn, mek, m, ctx) => {
     const query = (ctx.q || 'nature').trim();
     try {
-        const r = await axios.get(`https://source.unsplash.com/800x600/?${encodeURIComponent(query)}`, {
-            responseType: 'arraybuffer',
-            timeout: 15000
-        });
+        const img = await fetchKeywordImage(query);
         await conn.sendMessage(ctx.from, {
-            image: Buffer.from(r.data),
+            image: img,
             caption: `🖼️ Random: *${query}*`
         }, { quoted: mek });
     } catch (e) { return ctx.reply('❌ Image fetch fail.'); }
@@ -319,12 +334,9 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
-        const r = await axios.get(`https://source.unsplash.com/800x600/?panda&${Date.now()}`, {
-            responseType: 'arraybuffer',
-            timeout: 15000
-        });
+        const img = await fetchKeywordImage('panda');
         await conn.sendMessage(ctx.from, {
-            image: Buffer.from(r.data),
+            image: img,
             caption: '🐼 Random Panda!'
         }, { quoted: mek });
     } catch (e) { return ctx.reply('❌ Panda fetch fail.'); }

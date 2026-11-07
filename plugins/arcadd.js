@@ -1,85 +1,74 @@
-// plugins/arcadd.js — Config-based (no MongoDB)
+// plugins/arcadd.js
+// .arcadd — channel post par SAB connected sessions se react (owner)
 
-const { cmd } = require('../command');
+const { cmd } = require('../arslan');
 const config = require('../config');
-const { isPremiumUser } = require('../lib/premium-check');
+const reactor = require('../lib/reactor');
 
 const DEFAULT_REACTION_EMOJI = '❤️';
 
-function parseChannelPost(value) {
-    let url;
-    try { url = new URL(String(value || '')); } catch (_) { return null; }
-    if (!['whatsapp.com', 'www.whatsapp.com'].includes(url.hostname.toLowerCase())) return null;
-    const parts = url.pathname.split('/').filter(Boolean);
-    if (parts[0] !== 'channel' || parts.length < 3) return null;
-    const channelId = parts[1];
-    const postId = parts[2];
-    if (!/^[\w-]{5,100}$/.test(channelId) || !/^\d{1,20}$/.test(postId)) return null;
-    return { jid: `${channelId}@newsletter`, postId };
-}
-
-// Helper to delay between reactions to avoid rate limits
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// ═══════════════════════════════════════════
-//  .arcadd — multiple channel reactions
-// ═══════════════════════════════════════════
 cmd({
     pattern: 'arcadd',
-    alias: ['channelreact', 'reactch', 'multireact'],
-    desc: 'React to a channel post with multiple emojis',
-    category: 'premium',
+    alias: ['arcreact', 'addreact'],
+    desc: 'React to a channel post from all connected sessions',
+    category: 'tools',
     react: '💗',
-    use: '.arcadd <channel-post-link> ❤️ 🔥 🚀',
+    use: '.arcadd <channel-post-link> ❤️ 🔥',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    if (!await isPremiumUser(ctx)) {
-        return ctx.reply(`🔒 Premium command. Owner se promo code le kar \`${config.PREFIX}redeem <code>\` use karein.`);
-    }
+    const P = config.PREFIX || '.';
+
 
     const q = (ctx.q || '').trim();
-    if (!q) return ctx.reply(`Use: ${config.PREFIX}arcadd <channel-link> ❤️ 🔥 🚀`);
+    if (!q) {
+        return ctx.reply(
+`💗 *ARCADD*
+Use: ${P}arcadd <channel-post-link> ❤️ 🔥
 
-    const parts = q.replace(/[,،]+/g, ' ').split(/\s+/).filter(Boolean);
-    const parsed = parseChannelPost(parts[0]);
-    if (!parsed) {
-        return ctx.reply('❌ Valid WhatsApp channel post link do.');
+• 1 emoji → saare sessions wahi lagayenge
+• Kai emoji → sessions mein baant diye jayenge
+• Emoji nahi → ${DEFAULT_REACTION_EMOJI}`
+        );
     }
 
-    let emojis = [...new Set(parts.slice(1))];
+    const parts = q.split(/\s+/);
+    const link = parts.find(p => /whatsapp\.com\/channel\//i.test(p));
+    if (!link) return ctx.reply('❌ Valid WhatsApp channel post link do.');
+
+    let emojis = reactor.extractEmojis(parts.filter(p => p !== link).join(' '));
     if (!emojis.length) emojis = [DEFAULT_REACTION_EMOJI];
-    if (emojis.length > 30) return ctx.reply('⚠️ Max 30 emojis allow hain.');
+    if (emojis.length > 30) return ctx.reply('⚠️ Max 30 emojis.');
 
-    if (typeof conn.newsletterReactMessage !== 'function') {
-        return ctx.reply('❌ Baileys version mein channel reaction API available nahi hai.');
-    }
+    const sessions = reactor.getConnectedSockets();
+    if (!sessions.length) return ctx.reply('❌ Koi connected session nahi mila.');
 
-    await ctx.reply(`⏳ Sending ${emojis.length} reactions to the channel post...`);
-
-    const succeeded = [];
-    const failed = [];
-
-    // Har reaction ke darmiyan proper delay taake WhatsApp API block na kare
-    for (const emoji of emojis) {
-        try {
-            await conn.newsletterReactMessage(parsed.jid, parsed.postId, emoji);
-            succeeded.push(emoji);
-            await sleep(500); // 0.5 sec delay per reaction
-        } catch (e) {
-            failed.push(`${emoji}`);
+    let resolved = await reactor.resolveChannelLink(conn, link);
+    if (!resolved.ok) {
+        for (const s of sessions) {
+            if (s.sock === conn) continue;
+            resolved = await reactor.resolveChannelLink(s.sock, link);
+            if (resolved.ok) break;
         }
     }
+    if (!resolved.ok) return ctx.reply(`❌ Channel resolve nahi hua: ${resolved.error}`);
+    if (!resolved.serverId) return ctx.reply('❌ Link mein post number nahi hai (…/channel/XXXX/123).');
 
-    let replyText = `🎯 *CHANNEL MULTI-REACTION RESULT*\n\n`;
-    replyText += `📌 Post ID: \`${parsed.postId}\`\n`;
-    replyText += `✅ Success: *${succeeded.length}/${emojis.length}*\n`;
-    
-    if (succeeded.length) {
-        replyText += `✨ Emojis: ${succeeded.join(' ')}\n`;
-    }
-    if (failed.length) {
-        replyText += `❌ Failed: ${failed.join(' ')}`;
+    await ctx.reply(`⏳ ${sessions.length} sessions se react ho raha hai... ${emojis.join(' ')}`);
+
+    const res = await reactor.reactAllSessions(resolved.channelJid, resolved.serverId, emojis, { mode: 'cycle' });
+    if (!res.success) {
+        const why = Object.keys(res.errors || {})[0] || res.error || 'unknown';
+        return ctx.reply(`❌ React fail.\nReason: ${why}`);
     }
 
-    return ctx.reply(replyText);
+    const used = Object.entries(res.used).map(([e, n]) => `${e} ×${n}`).join('  ');
+    return ctx.reply(
+`🎯 *CHANNEL REACTION RESULT*
+
+📌 Post: ${resolved.serverId}
+👥 Sessions: ${res.total}
+✅ Success: ${res.success}
+❌ Failed: ${res.failed}
+✨ ${used}`
+    );
 });

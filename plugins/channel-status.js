@@ -1,7 +1,7 @@
 const { cmd } = require('../arslan');
 const config = require('../config');
 
-// Shared premium gate (paired/configured owner or active promo)
+// Premium removed — gate always passes
 const {
     requirePremium,
     isOwner,
@@ -16,7 +16,7 @@ cmd({
     pattern: 'channelstatus',
     alias: ['chstatus', 'chstat', 'statusupdate'],
     desc: 'Premium/Owner: Channel pe 24hr temporary status post karo',
-    category: 'premium',
+    category: 'tools',
     react: '📢',
     use: '.channelstatus <channel_jid> <text>',
     filename: __filename
@@ -68,7 +68,7 @@ cmd({
     pattern: 'chstatimg',
     alias: ['chstatusimg', 'chstatpic'],
     desc: 'Premium/Owner: Channel pe image status post karo',
-    category: 'premium',
+    category: 'tools',
     react: '🖼️',
     use: '.chstatimg <channel_jid> (image reply)',
     filename: __filename
@@ -104,7 +104,7 @@ cmd({
     pattern: 'chstatvid',
     alias: ['chstatusvideo', 'chstatvideo'],
     desc: 'Premium/Owner: Channel pe video status post karo',
-    category: 'premium',
+    category: 'tools',
     react: '🎥',
     use: '.chstatvid <channel_jid> (video reply)',
     filename: __filename
@@ -140,7 +140,7 @@ cmd({
     pattern: 'chstatsticker',
     alias: ['stickerstatus', 'chstatstk'],
     desc: 'Premium/Owner: Sticker channel pe post karo',
-    category: 'premium',
+    category: 'tools',
     react: '🎨',
     use: '.chstatsticker <channel_jid> (image reply)',
     filename: __filename
@@ -182,7 +182,7 @@ cmd({
     pattern: 'chstatremind',
     alias: ['statusremind'],
     desc: 'Premium/Owner: Status expiry reminder set karo',
-    category: 'premium',
+    category: 'tools',
     react: '⏰',
     use: '.chstatremind <channel_jid> <hours>',
     filename: __filename
@@ -219,7 +219,7 @@ cmd({
     pattern: 'chstatforward',
     alias: ['chforward'],
     desc: 'Premium/Owner: Channel post ko group me forward',
-    category: 'premium',
+    category: 'tools',
     react: '↗️',
     use: '.chstatforward <group_jid> (channel post pe reply)',
     filename: __filename
@@ -252,7 +252,7 @@ cmd({
     pattern: 'chstatreact',
     alias: ['chreactstatus'],
     desc: 'Premium/Owner: Channel status pe custom reaction',
-    category: 'premium',
+    category: 'tools',
     react: '💫',
     use: '.chstatreact <channel_jid> <serverId> <emoji>',
     filename: __filename
@@ -284,7 +284,7 @@ cmd({
     pattern: 'chstatbulk',
     alias: ['bulkstatus'],
     desc: 'Premium/Owner: Ek hi text multiple channels pe',
-    category: 'premium',
+    category: 'tools',
     react: '📣',
     use: '.chstatbulk <jid1,jid2,jid3> <text>',
     filename: __filename

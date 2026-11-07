@@ -1,22 +1,33 @@
 // plugins/animeinfo.js
 // RIZO HELL-MD — Anime info commands (multi-API, working)
-// APIs: Jikan v4, Nekos.best, Waifu.im, Nekosia, waifu.pics fallback
+// APIs (keyless): Jikan v4 for info, lib/anime-api.js for images
 
 const { cmd } = require('../arslan');
 const axios = require('axios');
+const api = require('../lib/anime-api');
 
 const JIKAN = 'https://api.jikan.moe/v4';
-const NEKOS_BEST = 'https://nekos.best/api/v2';
-const WAIFU_IM = 'https://api.waifu.im';
 const UA = 'RIZO-HELL-MD/3.0';
 
 async function get(url, opts = {}) {
-    const res = await axios.get(url, {
-        timeout: 12000,
-        headers: { 'User-Agent': UA, ...(opts.headers || {}) },
-        ...opts
-    });
-    return res.data;
+    // Jikan rate-limits (429) and sometimes 5xx: retry with backoff
+    let lastErr;
+    for (let i = 0; i < 3; i++) {
+        try {
+            const res = await axios.get(url, {
+                timeout: 15000,
+                headers: { 'User-Agent': UA, ...(opts.headers || {}) },
+                ...opts
+            });
+            return res.data;
+        } catch (e) {
+            lastErr = e;
+            const st = e.response?.status;
+            if (st && st < 500 && st !== 429) break;
+            await new Promise(r => setTimeout(r, 900 * (i + 1)));
+        }
+    }
+    throw lastErr;
 }
 
 const safe = (v, max = 300) => String(v || 'N/A').replace(/[\r\n]+/g, ' ').slice(0, max);
@@ -40,97 +51,16 @@ function register(pattern, alias, desc, handler) {
 // ═══════════════════════════════════════════
 //  MULTI-API IMAGE FETCHERS
 // ═══════════════════════════════════════════
-async function nekosBestImage(category = 'neko') {
-    try {
-        const d = await get(`${NEKOS_BEST}/${category}?amount=1`);
-        const r = d?.results?.[0];
-        if (r?.url && isUrl(r.url)) {
-            return { url: r.url, artist: r.artist_name, anime: r.anime_name };
-        }
-    } catch (e) { console.warn('[anime] nekos.best:', e.message); }
-    return null;
-}
 
-async function waifuImImage(tag = null) {
-    try {
-        const url = tag
-            ? `${WAIFU_IM}/search?included_tags=${encodeURIComponent(tag)}&is_nsfw=false`
-            : `${WAIFU_IM}/search?is_nsfw=false`;
-        const d = await get(url);
-        const img = d?.images?.[0];
-        if (img?.url && isUrl(img.url)) {
-            return { url: img.url, artist: img.artist?.name };
-        }
-    } catch (e) { console.warn('[anime] waifu.im:', e.message); }
-    return null;
-}
 
-async function nekosiaImage() {
-    try {
-        const d = await get('https://api.nekosia.cat/api/v1/images/catgirl');
-        const url = d?.image?.original?.url || d?.image?.compressed?.url;
-        if (url && isUrl(url)) {
-            return { url, artist: d?.artist?.name };
-        }
-    } catch (e) { console.warn('[anime] nekosia:', e.message); }
-    return null;
-}
 
-async function waifuPicsImage(category = 'waifu') {
-    try {
-        const d = await get(`https://api.waifu.pics/sfw/${category}`);
-        if (d?.url && isUrl(d.url)) return { url: d.url };
-    } catch (e) { console.warn('[anime] waifu.pics:', e.message); }
-    return null;
-}
 
 // Master — try all, return first successful
-async function getRandomAnimeImage(preferredCategory = 'waifu') {
-    // map category to each API
-    const catMap = {
-        waifu: { nek: 'waifu', wim: null },
-        neko: { nek: 'neko', wim: null },
-        husbando: { nek: 'husbando', wim: null },
-        hug: { nek: 'hug', wim: null },
-        pat: { nek: 'pat', wim: null },
-        kiss: { nek: 'kiss', wim: null },
-        cuddle: { nek: 'cuddle', wim: null },
-        wave: { nek: 'wave', wim: null },
-        highfive: { nek: 'highfive', wim: null },
-        handhold: { nek: null, wim: null },
-        smile: { nek: 'smile', wim: null },
-        dance: { nek: 'dance', wim: null },
-        wink: { nek: 'wink', wim: null },
-        happy: { nek: 'happy', wim: null }
-    };
-
-    const m = catMap[preferredCategory] || catMap.waifu;
-
-    // 1. Nekos.best
-    if (m.nek) {
-        const r = await nekosBestImage(m.nek);
-        if (r) return r;
-    }
-
-    // 2. Waifu.im
-    const w = await waifuImImage(m.wim);
-    if (w) return w;
-
-    // 3. Nekosia
-    const n = await nekosiaImage();
-    if (n) return n;
-
-    // 4. waifu.pics (fallback)
-    const wpCat = ['hug', 'pat', 'kiss', 'cuddle', 'wave', 'highfive', 'handhold'].includes(preferredCategory)
-        ? preferredCategory
-        : 'waifu';
-    const p = await waifuPicsImage(wpCat);
-    if (p) return p;
-
-    return null;
-}
 
 // ═══════════════════════════════════════════
+const getRandomAnimeImage = cat => api.randomImage(cat);
+const nekosBestImage = cat => api.nekosBest(cat);
+
 //  INFO COMMANDS (Jikan)
 // ═══════════════════════════════════════════
 

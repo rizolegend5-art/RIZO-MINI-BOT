@@ -1,4 +1,4 @@
-const { cmd } = require('../command');
+const { cmd } = require('../arslan');
 const config = require('../config');
 const fs = require('fs-extra');
 const path = require('path');

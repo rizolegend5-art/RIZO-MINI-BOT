@@ -2,7 +2,7 @@ const { cmd, commands } = require("../arslan");
 const moment = require("moment-timezone");
 const config = require("../config");
 
-const UPDATE_CHANNEL_JID = "120363412624902256@newsletter";
+const UPDATE_CHANNEL_JID = " 120363412624902256@newsletter";
 const UPDATE_CHANNEL_NAME = "📢 RIZO-X AMAN MD UPDATES";
 
 cmd({
@@ -34,15 +34,15 @@ cmd({
             fun: '🎮', general: '💎', group: '👥', islamic: '🕌',
             main: '⚡', menu: '📋', owner: '👑', premium: '💠',
             settings: '🔧', sticker: '🎨', system: '💻', tools: '🛠️',
-            music: '🎵', image: '🖼️', misc: '📌',
+            music: '🎵', image: '🖼️', referrals: '🔗', misc: '📌',
             search: '🔍', utility: '⚡', anime: '🎌'
         };
 
         const order = [
-            'premium', 'owner', 'admin', 'group', 'download', 'downloader',
+            'owner', 'admin', 'group', 'download', 'downloader',
             'music', 'islamic', 'fun', 'anime', 'tools', 'image', 'sticker',
             'settings', 'general', 'main', 'system', 'search', 'utility',
-            'misc'
+            'misc', 'referrals'
         ];
 
         const time = moment().tz("Asia/Karachi").format("HH:mm:ss");
@@ -69,7 +69,7 @@ cmd({
         menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
         menuText += `┃ ✧ ${config.PREFIX}botscript\n`;
         menuText += `┃ ✧ ${config.PREFIX}bugbotscript\n`;
-        menuText += `┃ ✧ ${config.PREFIX}promo\n`;
+        menuText += `┃ ✧ ${config.PREFIX}myref\n`;
         menuText += `┗━━━━━━━━━━━━━━━━━⊷\n\n`;
 
         const renderCategory = (cat) => {

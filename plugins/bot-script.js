@@ -12,7 +12,7 @@ cmd({
     pattern: 'botscript',
     alias: ['script', 'getscript', 'dlscript'],
     desc: 'Premium/Owner: RIZOMINIBOT V2 script',
-    category: 'premium',
+    category: 'tools',
     react: '📦',
     use: '.botscript',
     filename: __filename

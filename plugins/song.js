@@ -1,10 +1,11 @@
 // plugins/song.js
-// RIZO HELL-MD — Song download with working 2026 APIs
+// RIZO HELL-MD — Song download: LOCAL yt-dlp / ytdl-core first (no API), public APIs only as last fallback
 
 const { cmd } = require('../arslan');
 const config = require('../config');
 const axios = require('axios');
 const yts = require('yt-search');
+const mediaDl = require('../lib/media-dl');
 
 const CONFIG = {
     apiTimeout: 12000,
@@ -262,16 +263,36 @@ cmd({
             await conn.sendMessage(ctx.from, { text: songCaption }, { quoted: mek });
         }
 
-        const audioData = await getAudioUrl(video.url);
-        const buffer = await downloadAudioBuffer(audioData.download);
+        const baseName = (video.title || 'RIZO-Song').replace(/[\\/:*?"<>|]/g, '').slice(0, 100) || 'RIZO-Song';
+        let buffer = null;
+        let ext = 'mp3';
+        let finalTitle = baseName;
 
-        const filename = (audioData.title || video.title || 'RIZO-Song')
-            .replace(/[\\/:*?"<>|]/g, '').slice(0, 100) + '.mp3';
+        // 1) LOCAL (no API): yt-dlp / ytdl-core
+        try {
+            const local = await mediaDl.downloadAudio(video.url);
+            buffer = local.buffer;
+            ext = local.ext || 'mp3';
+        } catch (localErr) {
+            console.warn('[RIZO MUSIC] Local download failed, trying API fallbacks:', (localErr.details || [localErr.message]).join(' | '));
+        }
+
+        // 2) LAST RESORT: public APIs (only if local method failed)
+        if (!buffer) {
+            const audioData = await getAudioUrl(video.url);
+            buffer = await downloadAudioBuffer(audioData.download);
+            ext = 'mp3';
+            if (audioData.title) finalTitle = String(audioData.title).replace(/[\\/:*?"<>|]/g, '').slice(0, 100) || baseName;
+        }
+
+        if (buffer.length > mediaDl.MAX_BYTES) throw new Error('TOO_LARGE');
+
+        const mimeMap = { mp3: 'audio/mpeg', m4a: 'audio/mp4', opus: 'audio/ogg; codecs=opus', ogg: 'audio/ogg', webm: 'audio/webm' };
 
         await conn.sendMessage(ctx.from, {
             audio: buffer,
-            mimetype: 'audio/mpeg',
-            fileName: filename,
+            mimetype: mimeMap[ext] || 'audio/mpeg',
+            fileName: `${finalTitle}.${ext}`,
             ptt: false
         }, { quoted: mek });
 
@@ -280,6 +301,7 @@ cmd({
         console.error('[RIZO SONG ERROR]', error.code || error.response?.status || error.message || 'Unknown error');
         await conn.sendMessage(ctx.from, { react: { text: '❌', key: mek.key } });
 
+        if (error.message === 'TOO_LARGE') return ctx.reply('❌ Audio bohat bari hai (100MB se zyada).');
         if (error.message === 'NO_RESULT') return ctx.reply('❌ Song nahi mila. Dusra naam try karo.');
         if (error.message === 'ALL_AUDIO_APIS_FAILED') {
             return ctx.reply(

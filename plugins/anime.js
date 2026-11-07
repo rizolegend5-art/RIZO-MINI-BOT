@@ -1,9 +1,10 @@
 // plugins/anime.js
 // RIZO HELL-MD — Anime commands with multi-API fallback
-// APIs: Jikan v4, Nekos.best, Waifu.im, Nekosia, waifu.pics
+// APIs (all keyless): AniList, Jikan, Kitsu, Nekos.best, waifu.pics, Nekosia — via lib/anime-api.js
 
 const { cmd } = require('../arslan');
 const axios = require('axios');
+const api = require('../lib/anime-api');
 
 const TIMEOUT = 12000;
 const UA = 'RIZO-MINI-BOT/3.0';
@@ -24,160 +25,46 @@ const clean = v => String(v || '').replace(/[\r\n]+/g, ' ').slice(0, 160);
 const isUrl = v => typeof v === 'string' && /^https?:\/\//i.test(v);
 
 // ═══════════════════════════════════════════
+//  API LAYER — lib/anime-api.js (keyless, retry + fallback)
+// ═══════════════════════════════════════════
+const NEKOS_CATEGORIES = [...api.NEKOS_BEST_CATS];
+const WAIFU_TAGS = ['waifu', 'neko', 'maid', 'megumin', 'shinobu', 'raiden shogun', 'kamisato ayaka', 'marin kitagawa', 'hug', 'pat'];
+const nekosBestRandom = cat => api.nekosBest(cat);
+const waifuPicsRandom = cat => api.waifuPics(cat);
+const nekosiaRandom = () => api.nekosia();
+const waifuImRandom = tag => (tag ? api.taggedImage(tag) : api.randomImage('waifu'));
+const getAnimeImages = q => api.searchImages(q, 3);
+
+// ═══════════════════════════════════════════
 //  API 1 — JIKAN v4 (MyAnimeList)
 // ═══════════════════════════════════════════
 const JIKAN = 'https://api.jikan.moe/v4';
 
-async function jikanCharacterSearch(query) {
-    try {
-        const data = await httpGet(`${JIKAN}/characters?q=${encodeURIComponent(query)}&limit=5`);
-        return (data.data || [])
-            .map(c => c.images?.webp?.image_url || c.images?.jpg?.image_url)
-            .filter(isUrl);
-    } catch (e) {
-        console.warn('[anime] Jikan character:', e.message);
-        return [];
-    }
-}
 
-async function jikanAnimeSearch(query) {
-    try {
-        const data = await httpGet(`${JIKAN}/anime?q=${encodeURIComponent(query)}&limit=5&sfw=true`);
-        return (data.data || [])
-            .map(a => a.images?.webp?.large_image_url || a.images?.jpg?.large_image_url || a.images?.jpg?.image_url)
-            .filter(isUrl);
-    } catch (e) {
-        console.warn('[anime] Jikan anime:', e.message);
-        return [];
-    }
-}
 
 // ═══════════════════════════════════════════
 //  API 2 — NEKOS.BEST (SFW images/GIFs)
 // ═══════════════════════════════════════════
-const NEKOS_BEST = 'https://nekos.best/api/v2';
 
-const NEKOS_CATEGORIES = [
-    'neko', 'waifu', 'husbando', 'kitsune',
-    'happy', 'wink', 'wave', 'poke', 'dance',
-    'cuddle', 'pat', 'hug', 'kiss', 'smile'
-];
 
-async function nekosBestRandom(category = 'neko') {
-    try {
-        const data = await httpGet(`${NEKOS_BEST}/${category}?amount=1`);
-        const result = data?.results?.[0];
-        if (result?.url && isUrl(result.url)) {
-            return {
-                url: result.url,
-                artist: result.artist_name || null,
-                source: result.source_url || null,
-                anime: result.anime_name || null
-            };
-        }
-        return null;
-    } catch (e) {
-        console.warn('[anime] Nekos.best:', e.message);
-        return null;
-    }
-}
 
 // ═══════════════════════════════════════════
 //  API 3 — WAIFU.IM (SFW curated)
 // ═══════════════════════════════════════════
-const WAIFU_IM = 'https://api.waifu.im';
 
-const WAIFU_TAGS = [
-    'waifu', 'maid', 'marin-kitagawa', 'mori-calliope',
-    'raiden-shogun', 'oppai', 'selfies', 'uniform',
-    'kamisato-ayaka', 'genshin-impact'
-];
 
-async function waifuImRandom(tag) {
-    try {
-        const url = tag
-            ? `${WAIFU_IM}/search?included_tags=${encodeURIComponent(tag)}&is_nsfw=false`
-            : `${WAIFU_IM}/search?is_nsfw=false`;
-        const data = await httpGet(url);
-        const img = data?.images?.[0];
-        if (img?.url && isUrl(img.url)) {
-            return {
-                url: img.url,
-                artist: img.artist?.name || null,
-                source: img.source || null,
-                tags: img.tags?.map(t => t.name) || []
-            };
-        }
-        return null;
-    } catch (e) {
-        console.warn('[anime] Waifu.im:', e.message);
-        return null;
-    }
-}
 
 // ═══════════════════════════════════════════
 //  API 4 — NEKOSIA (keyless, no auth)
 // ═══════════════════════════════════════════
-async function nekosiaRandom() {
-    try {
-        const data = await httpGet('https://api.nekosia.cat/api/v1/images/catgirl');
-        const url = data?.image?.original?.url || data?.image?.compressed?.url;
-        if (url && isUrl(url)) {
-            return { url, artist: data?.artist?.name || null, tags: data?.tags || [] };
-        }
-        return null;
-    } catch (e) {
-        console.warn('[anime] Nekosia:', e.message);
-        return null;
-    }
-}
 
 // ═══════════════════════════════════════════
 //  API 5 — WAIFU.PICS (backup)
 // ═══════════════════════════════════════════
-async function waifuPicsRandom(category = 'waifu') {
-    try {
-        const data = await httpGet(`https://api.waifu.pics/sfw/${category}`);
-        if (data?.url && isUrl(data.url)) return { url: data.url };
-        return null;
-    } catch (e) {
-        console.warn('[anime] waifu.pics:', e.message);
-        return null;
-    }
-}
 
 // ═══════════════════════════════════════════
 //  MASTER — Character image search
 // ═══════════════════════════════════════════
-async function getAnimeImages(query) {
-    const urls = [];
-    const seen = new Set();
-
-    const push = arr => {
-        for (const u of arr) {
-            if (u && isUrl(u) && !seen.has(u)) { seen.add(u); urls.push(u); }
-        }
-    };
-
-    // 1. Jikan character search (best for names)
-    push(await jikanCharacterSearch(query));
-
-    // 2. Jikan anime posters if < 2 results
-    if (urls.length < 2) push(await jikanAnimeSearch(query));
-
-    // 3. Random fallback
-    if (!urls.length) {
-        const fallbacks = [
-            await waifuImRandom(),
-            await nekosBestRandom('neko'),
-            await waifuPicsRandom('waifu'),
-            await nekosiaRandom()
-        ];
-        for (const f of fallbacks) if (f?.url) push([f.url]);
-    }
-
-    return urls.slice(0, 3);
-}
 
 // ═══════════════════════════════════════════
 //  .anime — character/series search
@@ -258,13 +145,7 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
-        const sources = [
-            await nekosBestRandom('neko'),
-            await waifuImRandom(),
-            await waifuPicsRandom('waifu'),
-            await nekosiaRandom()
-        ];
-        const pick = sources.find(s => s?.url);
+        const pick = await api.randomImage('neko');
 
         if (!pick) return ctx.reply('❌ Random API unavailable.');
 
@@ -395,12 +276,7 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
-        const sources = [
-            await nekosBestRandom('neko'),
-            await nekosiaRandom(),
-            await waifuPicsRandom('neko')
-        ];
-        const pick = sources.find(s => s?.url);
+        const pick = await api.randomImage('neko');
         if (!pick) return ctx.reply('❌ Neko API unavailable.');
 
         let caption = '🐱 *RIZO NEKO*';
@@ -428,12 +304,7 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
-        const sources = [
-            await waifuImRandom(),
-            await nekosBestRandom('waifu'),
-            await waifuPicsRandom('waifu')
-        ];
-        const pick = sources.find(s => s?.url);
+        const pick = await api.randomImage('waifu');
         if (!pick) return ctx.reply('❌ Waifu API unavailable.');
 
         let caption = '💗 *RIZO WAIFU*';
@@ -461,11 +332,7 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, ctx) => {
     try {
-        const sources = [
-            await nekosBestRandom('husbando'),
-            await waifuPicsRandom('husbando')
-        ];
-        const pick = sources.find(s => s?.url);
+        const pick = await api.randomImage('husbando');
         if (!pick) return ctx.reply('❌ Husbando API unavailable.');
 
         let caption = '💙 *RIZO HUSBANDO*';

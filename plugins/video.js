@@ -1,87 +1,61 @@
-const axios = require('axios')
-const yts = require('yt-search')
-const { cmd } = require('../arslan')
-const { fakevCard } = require('../lib/fakevCard')
+// plugins/video.js — YouTube video download, LOCAL (yt-dlp), no API needed
+const yts = require('yt-search');
+const { cmd } = require('../arslan');
+const { fakevCard } = require('../lib/fakevCard');
+const mediaDl = require('../lib/media-dl');
 
 cmd({
-pattern: "video",
-alias: ["vid","playvideo"],
-desc: "Download YouTube Video (Fast)",
-category: "download",
-react: "🎬",
-filename: __filename
-},
-async (conn, mek, m, { from, reply, text }) => {
+    pattern: 'video',
+    alias: ['vid', 'playvideo', 'ytmp4', 'mp4'],
+    desc: 'Download YouTube video',
+    category: 'download',
+    react: '🎬',
+    use: '.video <name or youtube link>',
+    filename: __filename
+}, async (conn, mek, m, { from, reply, text }) => {
+    try {
+        const query = String(text || '').trim();
+        if (!query) return reply('❌ Example:\n.video pasoori');
 
-try {
+        let vid;
+        if (/youtube\.com|youtu\.be/i.test(query)) {
+            const r = await yts(query);
+            vid = r?.videos?.[0] || { url: query, title: 'YouTube Video', timestamp: 'Unknown', thumbnail: null };
+        } else {
+            const search = await yts(query);
+            if (!search.videos.length) return reply('❌ No video found');
+            vid = search.videos[0];
+        }
 
-if (!text) {
-return reply("❌ Example:\n.video pasoori")
-}
+        // keep long videos away from the server (WhatsApp/limits)
+        if (vid.seconds && vid.seconds > 20 * 60) {
+            return reply('❌ Video 20 minute se lambi hai. Chhoti video try karo.');
+        }
 
-/* 🔍 Search */
-const search = await yts(text)
-
-if (!search.videos.length) {
-return reply("❌ No video found")
-}
-
-const vid = search.videos[0]
-
-/* 🎨 Preview */
-
-const caption = `
-╔ஜ۩▒█ RIZO X ᴍᴅ █▒۩ஜ╗
+        const caption =
+`╔ஜ۩▒█ RIZO X ᴍᴅ █▒۩ஜ╗
 ┃🎬 VIDEO FOUND
 ┃📌 Title: ${vid.title}
 ┃⏱️ Duration: ${vid.timestamp}
 ┃⚡ Sending video...
-╰━━━━━━━━━━━━━━⊷
-`
+╰━━━━━━━━━━━━━━⊷`;
 
-await conn.sendMessage(from,{
-image:{url:vid.thumbnail},
-caption
-},{quoted:fakevCard})
+        if (vid.thumbnail) {
+            await conn.sendMessage(from, { image: { url: vid.thumbnail }, caption }, { quoted: fakevCard }).catch(() => reply(caption));
+        } else {
+            await reply(caption);
+        }
 
-/* 🎥 API */
+        const { buffer } = await mediaDl.downloadVideo(vid.url, 720);
+        if (buffer.length > mediaDl.MAX_BYTES) return reply('❌ Video bohat bari hai (100MB+).');
 
-const api = `https://arslan-apis-v2.vercel.app/download/ytmp4?url=${encodeURIComponent(vid.url)}`
-
-let res
-try {
-  res = await axios.get(api,{timeout:20000})
-} catch (apiErr) {
-  console.error("VIDEO API ERROR:", apiErr.message)
-  return reply(`❌ Video API not responding (${apiErr.code || apiErr.message}). Try again in a bit.`)
-}
-
-if(
-!res.data ||
-!res.data.status ||
-!res.data.result ||
-!res.data.result.download ||
-!res.data.result.download.url
-){
-return reply("❌ Video API failed (no download link returned)")
-}
-
-const videoUrl = res.data.result.download.url
-const title = res.data.result.metadata.title || vid.title
-
-/* 🚀 SEND VIDEO DIRECT */
-
-await conn.sendMessage(from,{
-video:{url:videoUrl},
-mimetype:"video/mp4",
-caption:`🎬 *${title}*\n\n> © RIZO-ᴍᴅ`
-},{quoted:fakevCard})
-
-}catch(err){
-
-console.log(err)
-reply("❌ Video error")
-
-}
-
-})
+        await conn.sendMessage(from, {
+            video: buffer,
+            mimetype: 'video/mp4',
+            caption: `🎬 *${vid.title}*\n\n> © RIZO-ᴍᴅ`
+        }, { quoted: fakevCard });
+    } catch (err) {
+        console.error('[VIDEO]', err.details || err.message);
+        reply('❌ Video download nahi ho saki. Thori der baad try karo.');
+    }
+});

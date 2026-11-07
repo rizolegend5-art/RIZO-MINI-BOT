@@ -1,4 +1,5 @@
 const axios = require("axios");
+const mediaDl = require('../lib/media-dl');
 const { cmd } = require('../arslan');
 const { fakevCard } = require('../lib/fakevCard');
 
@@ -20,7 +21,21 @@ cmd({
         // Show processing reaction
         await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        // Fetch from API
+        // 1) LOCAL (no API) via yt-dlp
+        try {
+            const local = await mediaDl.downloadAnyVideo(url.trim());
+            await conn.sendMessage(from, {
+                video: local.buffer,
+                mimetype: 'video/mp4',
+                caption: `*_ɪɴsᴛᴀɢʀᴀᴍ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ_*\n\n> © RIZO-ᴍᴅ`
+            }, { quoted: fakevCard });
+            await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
+            return;
+        } catch (localErr) {
+            console.warn('[IGDL] local download failed, trying API:', localErr.message);
+        }
+
+        // 2) fallback: public API
         const apiUrl = `https://api-aswin-sparky.koyeb.app/api/downloader/igdl?url=${encodeURIComponent(url)}`;
         const response = await axios.get(apiUrl);
 

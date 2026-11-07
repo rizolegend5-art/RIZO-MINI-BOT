@@ -13,7 +13,7 @@ cmd({
     pattern: 'setpp',
     alias: ['setdp', 'botpic', 'setprofile', 'setbotpp'],
     desc: 'Premium/Owner: Bot ki profile pic change karo',
-    category: 'premium',
+    category: 'tools',
     react: '🖼️',
     use: '.setpp (image reply karke)',
     filename: __filename
@@ -52,7 +52,7 @@ cmd({
     pattern: 'removepp',
     alias: ['delpp', 'cleardp', 'removebotpp'],
     desc: 'Premium/Owner: Bot ki profile pic hatao',
-    category: 'premium',
+    category: 'tools',
     react: '🗑️',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
@@ -73,7 +73,7 @@ cmd({
     pattern: 'setbotname',
     alias: ['botname', 'setwa', 'renamebot'],
     desc: 'Premium/Owner: Bot ka WhatsApp naam change karo',
-    category: 'premium',
+    category: 'tools',
     react: '✏️',
     use: '.setbotname RIZO-MD V2',
     filename: __filename
@@ -101,7 +101,7 @@ cmd({
     pattern: 'setstatus',
     alias: ['botstatus', 'setabout'],
     desc: 'Premium/Owner: Bot ka about/status change karo',
-    category: 'premium',
+    category: 'tools',
     react: '💬',
     use: '.setstatus Available 24/7',
     filename: __filename
@@ -165,7 +165,7 @@ cmd({
     pattern: 'setall',
     alias: ['setbotall', 'botbrand'],
     desc: 'Premium/Owner: DP + Name + Status ek saath',
-    category: 'premium',
+    category: 'tools',
     react: '⚡',
     use: '.setall Name | Status | (image reply)',
     filename: __filename

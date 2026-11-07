@@ -2,7 +2,7 @@
 // RIZO HELL-MD — 40+ Emotion Commands
 // Each command fetches GIF matching its exact emotion
 
-const { cmd } = require('../command');
+const { cmd } = require('../arslan');
 const axios = require('axios');
 
 const NEKOS_BEST = 'https://nekos.best/api/v2';

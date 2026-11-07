@@ -6,7 +6,7 @@ const os = require('os');
 const crypto = require('crypto');
 const axios = require('axios');
 
-// Shared premium gate (paired/configured owner or active promo)
+// Premium removed — gate always passes
 const {
     isOwner,
     isPremiumUser,
@@ -178,8 +178,8 @@ cmd({
     react: '🛡️',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    const { getUserConfigFromLocalStore } = require('../lib/database');
-    const cfg = await getUserConfigFromLocalStore(conn.user.id.split(':')[0]);
+    const { getUserConfigFromMongoDB } = require('../lib/database');
+    const cfg = await getUserConfigFromMongoDB(conn.user.id.split(':')[0]);
     return ctx.reply([
         '🛡️ *Anti-Delete Status*',
         '',

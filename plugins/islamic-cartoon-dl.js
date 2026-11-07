@@ -1,6 +1,7 @@
 const { cmd } = require('../arslan');
 const config = require('../config');
 const axios = require('axios');
+const mediaDl = require('../lib/media-dl');
 
 const DL_API = 'https://api.qasimdev.dpdns.org/api/loaderto/download';
 const API_KEY = process.env.ISLAMIC_DL_API_KEY || '';
@@ -8,7 +9,15 @@ const API_KEY = process.env.ISLAMIC_DL_API_KEY || '';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function downloadWithRetry(url, format = '360', retries = 3) {
-    if (!API_KEY) throw new Error('ISLAMIC_DL_API_KEY_NOT_CONFIGURED');
+    // 1) LOCAL (no API key needed) via yt-dlp
+    try {
+        const local = await mediaDl.downloadVideo(url, Number(format) || 360);
+        if (local.buffer.length <= mediaDl.MAX_BYTES) return { buffer: local.buffer };
+    } catch (e) {
+        console.warn('[ISLAMIC-DL] local download failed:', (e.details || [e.message]).join(' | '));
+    }
+    // 2) optional paid API (only if key configured)
+    if (!API_KEY) throw new Error('LOCAL_DOWNLOAD_FAILED');
     for (let i = 0; i < retries; i++) {
         try {
             const { data } = await axios.get(DL_API, {
@@ -51,7 +60,7 @@ cmd({
             '• `.islamiccartoon Musa and Amina episode`',
             '',
             '🔎 Main 4-minute se lambi videos ko prefer karta hai aur Shorts/15-second clips ko skip karta hai.',
-            'ℹ️ Full episode ka watch link bhejega; download provider agar sirf preview de to usay full episode keh kar nahi bhejega.'
+            'ℹ️ Poori episode download karke bhejta hai (480p -> 360p -> 240p, file size ke hisab se).'
         ].join('\n'));
     }
 
@@ -112,13 +121,35 @@ cmd({
             '💚 RIZO HELL-MD | Shorts aur bohat choti clips ko filter kiya gaya hai.'
         ].join('\n');
         if (thumb) {
-            await conn.sendMessage(ctx.from, { image: { url: thumb }, caption }, { quoted: mek });
+            await conn.sendMessage(ctx.from, { image: { url: thumb }, caption: caption + '\n⏳ Full episode download ho raha hai... (kuch minute lag sakte hain)' }, { quoted: mek });
         } else {
-            await ctx.reply(caption);
+            await ctx.reply(caption + '\n⏳ Full episode download ho raha hai...');
+        }
+
+        // FULL episode, local yt-dlp only (no preview-limited API) — saved to a file, then sent
+        const dl = await mediaDl.downloadFullVideoFile(chosen.url, { maxBytes: 250 * 1024 * 1024 });
+        try {
+            const got = Math.round(dl.duration || 0);
+            // if the file is much shorter than the real episode, don't pretend it is full
+            if (got && got < seconds * 0.8) {
+                await ctx.reply(`\u26a0\ufe0f Download sirf ${Math.floor(got / 60)}m ${got % 60}s ka mila (episode ${mins}m ${secs}s ka hai). Watch link: ${chosen.url}`);
+                return;
+            }
+            const mb = (dl.size / 1048576).toFixed(1);
+            const asDoc = dl.size > 90 * 1024 * 1024; // very big files go as document so WhatsApp accepts them
+            const msg = {
+                mimetype: 'video/mp4',
+                fileName: `${title.replace(/[\\/:*?"<>|]/g, '').slice(0, 80)}.mp4`,
+                caption: `\ud83d\udcfa *${title}*\n\u23f1\ufe0f ${mins}m ${String(secs).padStart(2, '0')}s | ${dl.height}p | ${mb} MB\n\n> *_Downloaded by ${config.BOT_NAME}_*`
+            };
+            if (asDoc) msg.document = { url: dl.path }; else msg.video = { url: dl.path };
+            await conn.sendMessage(ctx.from, msg, { quoted: mek });
+        } finally {
+            dl.cleanup();
         }
     } catch (err) {
         console.error('[ISLAMIC CARTOON] Error:', err.message);
-        await ctx.reply('❌ Search abhi fail ho rahi hai. Thori dair baad dobara try karo.');
+        await ctx.reply(err.message === 'LOCAL_DOWNLOAD_FAILED' ? `❌ Episode download nahi ho saki (YouTube block ya file bohat badi).\nYTDLP_COOKIES set karke try karo.\n${(err.details || []).slice(-1)[0] || ''}` : '❌ Search abhi fail ho rahi hai. Thori dair baad dobara try karo.');
     }
 });
 
@@ -174,7 +205,7 @@ cmd({
         const data = await downloadWithRetry(videoUrl, '360');
 
         await conn.sendMessage(ctx.from, {
-            video: { url: data.downloadUrl },
+            video: data.buffer || { url: data.downloadUrl },
             mimetype: 'video/mp4',
             fileName: `${data.title || videoTitle || 'naat'}.mp4`,
             caption: `🎵 *${data.title || videoTitle}*\n\n> *_Downloaded by ${config.BOT_NAME}_*`
@@ -182,7 +213,7 @@ cmd({
 
     } catch (err) {
         console.error('[NAAT VIDEO] Download failed:', err.code || err.response?.status || 'request error');
-        await ctx.reply(err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED'
+        await ctx.reply((err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED' || err.message === 'LOCAL_DOWNLOAD_FAILED')
             ? '❌ Video downloader is not configured on this deployment.'
             : '❌ Video download service is temporarily unavailable. Try again later.');
     }
@@ -241,7 +272,7 @@ cmd({
         const data = await downloadWithRetry(videoUrl, '360');
 
         await conn.sendMessage(ctx.from, {
-            video: { url: data.downloadUrl },
+            video: data.buffer || { url: data.downloadUrl },
             mimetype: 'video/mp4',
             fileName: `${data.title || videoTitle || 'islamic'}.mp4`,
             caption: `🎥 *${data.title || videoTitle}*\n\n> *_Downloaded by ${config.BOT_NAME}_*`
@@ -249,7 +280,7 @@ cmd({
 
     } catch (err) {
         console.error('[ISLAMIC VIDEO] Download failed:', err.code || err.response?.status || 'request error');
-        await ctx.reply(err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED'
+        await ctx.reply((err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED' || err.message === 'LOCAL_DOWNLOAD_FAILED')
             ? '❌ Video downloader is not configured on this deployment.'
             : '❌ Video download service is temporarily unavailable. Try again later.');
     }
@@ -282,7 +313,7 @@ cmd({
         const data = await downloadWithRetry(vid.url, '360');
 
         await conn.sendMessage(ctx.from, {
-            video: { url: data.downloadUrl },
+            video: data.buffer || { url: data.downloadUrl },
             mimetype: 'video/mp4',
             fileName: `${data.title || vid.title}.mp4`,
             caption: `📚 *${data.title || vid.title}*\n\n> *_Downloaded by ${config.BOT_NAME}_*`
@@ -290,7 +321,7 @@ cmd({
 
     } catch (err) {
         console.error('[PROPHET VIDEO] Download failed:', err.code || err.response?.status || 'request error');
-        await ctx.reply(err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED'
+        await ctx.reply((err.message === 'ISLAMIC_DL_API_KEY_NOT_CONFIGURED' || err.message === 'LOCAL_DOWNLOAD_FAILED')
             ? '❌ Video downloader is not configured on this deployment.'
             : '❌ Video download service is temporarily unavailable. Try again later.');
     }
