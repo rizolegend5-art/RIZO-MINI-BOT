@@ -765,6 +765,7 @@ async function arslanPair(number, res = null) {
                             });
                         } catch (e) {
                             arslanLog(`PLUGIN ERROR [${command}]: ${e.message}`, 'error');
+                            try { await reply(`⚠️ *${command}* chalte waqt error aaya:\n${String(e.message || e).slice(0, 200)}`); } catch (_) {}
                         }
                     }
                 }

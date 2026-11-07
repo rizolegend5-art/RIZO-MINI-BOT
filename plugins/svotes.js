@@ -9,13 +9,21 @@ const reactor = require('../lib/reactor');
 
 cmd({
     pattern: 'svotes',
-    alias: ['svote', 'allvote', 'sessionvotes', 'votesall'],
+    alias: ['svote', 'allvote', 'sessionvotes', 'votesall', 'massvote', 'autovote'],
     desc: 'All connected sessions vote on a channel poll (1/2, A/B or name)',
     category: 'general',
     react: '🗳️',
     use: '.svotes <channel-poll-link> <1|2|A|B|name>',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
+    try {
+        return await handle(conn, mek, m, ctx);
+    } catch (e) {
+        return ctx.reply('⚠️ svotes error: ' + String(e.message || e).slice(0, 200));
+    }
+});
+
+async function handle(conn, mek, m, ctx) {
     const P = config.PREFIX || '.';
     const q = (ctx.q || '').trim();
 
@@ -50,6 +58,7 @@ ${P}svotes <poll-link> list     → poll ke options dekho
 
     const sessions = reactor.getConnectedSockets();
     if (!sessions.length) return ctx.reply('❌ Koi connected session nahi mila.');
+    await ctx.reply('🔎 Poll dhoond raha hoon...');
 
     // resolve channel (try this session first, then the others)
     let resolved = await voter.resolveChannelLink(conn, link);
@@ -135,12 +144,12 @@ Vote: ${P}svotes <link> 1`
 ✅ Success: ${res.success}
 ❌ Failed: ${res.failed}
 
-${used}`;
+${used}\n\n⚙️ Method: ${Object.entries(res.methods || {}).map(([k, v]) => k + ' ×' + v).join(', ') || '-'}\n\nℹ️ Success ka matlab: vote ki request bhej di gayi. Asal count poll mein khud check karein.`;
     if (res.failed) {
         const top = Object.entries(res.errors).slice(0, 2).map(([k, v]) => `• ${k} (${v})`).join('\n');
         out += `\n\n⚠️ Fail reasons:\n${top}`;
     }
     return ctx.reply(out);
-});
+}
 
 console.log('[RIZO Mini Bot] .svotes loaded');

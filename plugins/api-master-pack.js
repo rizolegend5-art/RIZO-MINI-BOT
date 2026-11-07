@@ -41,7 +41,20 @@ cmd({
     }
 });
 
-// 2. WAIFU — Random waifu
+// 2. WAIFU — Random waifu (multi-API fallback: nekos.best -> waifu.pics -> nekosia -> waifu.im -> purrbot)
+const animeApi = require('../lib/anime-api');
+async function sendRandomAnime(conn, mek, ctx, category, caption) {
+    const pick = await animeApi.randomImage(category);
+    if (!pick || !pick.url) return ctx.reply('❌ Anime image servers abhi jawab nahi de rahe. `.nettest` chala kar internet check karein.');
+    try {
+        await conn.sendMessage(ctx.from, { image: { url: pick.url }, caption }, { quoted: mek });
+    } catch (e1) {
+        // WhatsApp could not fetch the URL itself -> download here and send as a file
+        const r = await axios.get(pick.url, { responseType: 'arraybuffer', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        await conn.sendMessage(ctx.from, { image: Buffer.from(r.data), caption }, { quoted: mek });
+    }
+}
+
 cmd({
     pattern: 'waifu',
     alias: ['animegirl'],
@@ -50,15 +63,8 @@ cmd({
     react: '💖',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    try {
-        const r = await axios.get('https://api.waifu.pics/sfw/waifu', { timeout: 10000 });
-        if (r.data?.url) {
-            await conn.sendMessage(ctx.from, {
-                image: { url: r.data.url },
-                caption: '💖 Random Waifu'
-            }, { quoted: mek });
-        }
-    } catch (e) { return ctx.reply('❌ Fail.'); }
+    try { await sendRandomAnime(conn, mek, ctx, 'waifu', '💖 Random Waifu'); }
+    catch (e) { return ctx.reply('❌ Waifu nahi aayi: ' + String(e.message).slice(0, 120)); }
 });
 
 // 3. NEKO — Random neko
@@ -70,15 +76,8 @@ cmd({
     react: '🐱',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
-    try {
-        const r = await axios.get('https://api.waifu.pics/sfw/neko', { timeout: 10000 });
-        if (r.data?.url) {
-            await conn.sendMessage(ctx.from, {
-                image: { url: r.data.url },
-                caption: '🐱 Random Neko'
-            }, { quoted: mek });
-        }
-    } catch (e) { return ctx.reply('❌ Fail.'); }
+    try { await sendRandomAnime(conn, mek, ctx, 'neko', '🐱 Random Neko'); }
+    catch (e) { return ctx.reply('❌ Neko nahi aayi: ' + String(e.message).slice(0, 120)); }
 });
 
 // 4. ANIMEQUOTE — Anime quote

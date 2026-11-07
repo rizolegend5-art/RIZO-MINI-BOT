@@ -239,6 +239,7 @@ cmd({
 
     await conn.sendMessage(ctx.from, { react: { text: '⏳', key: mek.key } });
 
+    let localReason = '';
     try {
         const video = await searchSong(query);
 
@@ -270,16 +271,19 @@ cmd({
 
         // 1) LOCAL (no API): yt-dlp / ytdl-core
         try {
-            const local = await mediaDl.downloadAudio(video.url);
+            const local = await mediaDl.downloadAudio(video.url, { fallbackQuery: video.title });
             buffer = local.buffer;
             ext = local.ext || 'mp3';
         } catch (localErr) {
+            localReason = (localErr.details || [localErr.message]).slice(-3).join('\n');
             console.warn('[RIZO MUSIC] Local download failed, trying API fallbacks:', (localErr.details || [localErr.message]).join(' | '));
         }
 
         // 2) LAST RESORT: public APIs (only if local method failed)
         if (!buffer) {
-            const audioData = await getAudioUrl(video.url);
+            let audioData;
+            try { audioData = await getAudioUrl(video.url); }
+            catch (apiErr) { apiErr.localReason = localReason; throw apiErr; }
             buffer = await downloadAudioBuffer(audioData.download);
             ext = 'mp3';
             if (audioData.title) finalTitle = String(audioData.title).replace(/[\\/:*?"<>|]/g, '').slice(0, 100) || baseName;
@@ -304,12 +308,17 @@ cmd({
         if (error.message === 'TOO_LARGE') return ctx.reply('❌ Audio bohat bari hai (100MB se zyada).');
         if (error.message === 'NO_RESULT') return ctx.reply('❌ Song nahi mila. Dusra naam try karo.');
         if (error.message === 'ALL_AUDIO_APIS_FAILED') {
+            const why = String(error.localReason || localReason || '');
+            let hint = '';
+            if (/sign in to confirm|not a bot|cookies/i.test(why)) hint = '🔒 YouTube ne server ka IP block kiya hai.\n👉 YTDLP_COOKIES=/path/cookies.txt set karein (browser se export kiya hua).';
+            else if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|getaddrinfo|Unable to download/i.test(why)) hint = '🌐 Server se YouTube/internet nahi khul raha (network block).';
+            else if (/YTDLP_UNAVAILABLE|ENOENT|spawn/i.test(why)) hint = '⚙️ yt-dlp install nahi ho saka. YTDLP_PATH set karein ya GitHub access check karein.';
+            else if (/ffmpeg|ffprobe/i.test(why)) hint = '⚙️ ffmpeg missing hai.';
             return ctx.reply(
-                '❌ *Saari audio APIs fail hain.*\n\n' +
-                '💡 *Try karo:*\n' +
-                '• YouTube URL direct bhejo: `.play https://youtu.be/xxxxx`\n' +
-                '• 5 min baad retry karo\n' +
-                '• Bot restart karo (APIs refresh hote hain)'
+                '❌ *Audio download nahi ho saka.*\n\n' +
+                (hint ? hint + '\n\n' : '') +
+                (why ? '🧾 *Reason:*\n```' + why.slice(0, 350) + '```\n\n' : '') +
+                '💡 `.nettest` chala kar dekhein kya block hai.'
             );
         }
         return ctx.reply('❌ Audio could not be downloaded right now. Please try again later.');

@@ -7,13 +7,21 @@ const reactor = require('../lib/reactor');
 
 cmd({
     pattern: 'sreacts',
-    alias: ['sreact', 'allreact', 'sessionreacts', 'massreact'],
+    alias: ['sreact', 'allreact', 'sessionreacts', 'massreact', 'arcadd', 'arcreact', 'addreact'],
     desc: 'All connected sessions react on a channel post',
     category: 'general',
     react: '💫',
     use: '.sreacts <channel-post-link> [emojis]',
     filename: __filename
 }, async (conn, mek, m, ctx) => {
+    try {
+        return await handleSreacts(conn, mek, m, ctx);
+    } catch (e) {
+        return ctx.reply('⚠️ sreacts error: ' + String(e.message || e).slice(0, 200));
+    }
+});
+
+async function handleSreacts(conn, mek, m, ctx) {
     const P = config.PREFIX || '.';
     const q = (ctx.q || '').trim();
 
@@ -134,6 +142,6 @@ ${P}sreacts <channel-post-link> ❤️ follow\n(Group mein kisi message ko *repl
         out += `\n\n⚠️ Fail reasons:\n${top}`;
     }
     return ctx.reply(out);
-});
+}
 
 console.log('[RIZO Mini Bot] .sreacts loaded');

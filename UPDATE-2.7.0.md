@@ -41,3 +41,12 @@ Saare connected sessions channel poll par vote karte hain.
 - Ring mein 8-14 emojis (sessions ki tadaad ke hisab se), diye hue emojis repeat hote hain.
 - Purana single emoji sticker chahiye to: `.sreacts sticker static ❤️`
 - Size WhatsApp ki 500 KB hadd ke andar rakhne ke liye khud quality kam karta hai. Pehli baar banne mein 1-20 second lag sakte hain, phir cache se foran.
+
+## Fix round — svotes / sreacts / song / anime
+- Plugin errors ab chat mein dikhte hain (pehle sirf console mein jate the, isi liye command "chup" lagta tha).
+- `.svotes`: har network call par time limit (12-15s). Hang nahi hota, jawab aata hai. `.massvote` / `.autovote` ab isi ke alias hain.
+- `plugins/massvote.js` hata diya: wo asal vote nahi karta tha, sirf nakli counter badhata tha.
+- `.arcadd` ab `.sreacts` wala hi engine hai (channel link + group reply mode + sticker). `arcadd.js` hata diya.
+- Song/video: YouTube ke 6 clients ek ek kar ke try hote hain (default, android_vr, tv, web_safari, mweb, ios), phir ytdl-core, phir SoundCloud. Fail hone par asal wajah chat mein.
+- Naya `.nettest` (aur `.nettest yt`): server ka internet / yt-dlp / ffmpeg / YouTube check.
+- `.waifu` / `.neko`: purana single-API handler (api-master-pack) hata kar 5-API chain (nekos.best, waifu.pics, nekosia, waifu.im, purrbot).
