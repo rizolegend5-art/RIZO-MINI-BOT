@@ -52,69 +52,69 @@ cmd({
         //  └──────────────────
         //  ═══════════════════
         //  ✪
+        // short lines on purpose: long dashed lines wrap on phones and break the box
         const block = (title, lines) => {
             let out = `┌○═◇◇ *${title}* ◇◇═•○\n`;
-            out += `│☆ ┌┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈✱\n`;
+            out += `│☆ ┌┈┈┈┈┈┈┈┈┈┈┈┈┈┈✱\n`;
             for (const l of lines) out += `│☆ ${l}\n`;
-            out += `│☆ └┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈•○\n`;
-            out += `└──────────────────────\n`;
-            out += `══════════════════════\n`;
+            out += `│☆ └┈┈┈┈┈┈┈┈┈┈┈┈┈┈•○\n`;
+            out += `└────────────────\n`;
+            out += `════════════════\n`;
             out += `✪\n\n`;
             return out;
         };
 
+        const PAGE = 30;   // commands per box; a category is never cut in the middle of a box
         const renderCategory = (cat) => {
-            if (!grouped[cat] || !grouped[cat].length) return '';
-            const cmds = [...new Set(grouped[cat])].sort();
-            return block(cat.toUpperCase(), cmds.map(c => `*${P}${c.toUpperCase()}*`));
+            if (!grouped[cat] || !grouped[cat].length) return [];
+            const cmds = [...new Set(grouped[cat])].sort().map(c => `*${P}${c.toUpperCase()}*`);
+            const pages = Math.ceil(cmds.length / PAGE);
+            const out = [];
+            for (let i = 0; i < pages; i++) {
+                const title = pages > 1 ? `${cat.toUpperCase()} ${i + 1}/${pages}` : cat.toUpperCase();
+                out.push(block(title, cmds.slice(i * PAGE, (i + 1) * PAGE)));
+            }
+            return out;
         };
 
-        const headerText = block(config.BOT_NAME || 'RIZO-MD', [
-            `*COMMANDS* : ${totalCommands}`,
-            `*TIME* : ${time}`,
-            `*DATE* : ${date}`,
-            `*OWNER* : ${ownerDisplay}`,
-            `*PREFIX* : ${P}`,
-            `*MODE* : ${(config.WORK_TYPE || 'public').toUpperCase()}`
+        const botTitle = String(config.BOT_NAME || 'RIZO-MD').toUpperCase();
+        const headerText = block(botTitle.length > 10 ? 'RIZO-MD' : botTitle, [
+            `*COMMANDS* : *${totalCommands}*`,
+            `*TIME* : *${time}*`,
+            `*DATE* : *${date.toUpperCase()}*`,
+            `*OWNER* : *${ownerDisplay}*`,
+            `*PREFIX* : *${P}*`,
+            `*MODE* : *${(config.WORK_TYPE || 'public').toUpperCase()}*`
         ]);
 
         const sections = [];
-        for (const cat of order) { const r = renderCategory(cat); if (r) sections.push(r); }
+        for (const cat of order) sections.push(...renderCategory(cat));
         for (const cat of Object.keys(grouped).sort()) {
-            if (!order.includes(cat)) { const r = renderCategory(cat); if (r) sections.push(r); }
+            if (!order.includes(cat)) sections.push(...renderCategory(cat));
         }
-        sections.push(`© ᴘᴏᴡᴇʀᴇᴅ ʙʏ *${config.BOT_NAME || 'RIZO-MD'}*`);
 
-        // WhatsApp cuts very long messages, so the menu is sent in chunks of whole categories
+        // pack whole boxes into messages (never split a box)
         const chunks = [];
         let cur = '';
         for (const sec of sections) {
-            if (cur && (cur.length + sec.length) > 3000) { chunks.push(cur); cur = ''; }
+            if (cur && (cur.length + sec.length) > 2800) { chunks.push(cur); cur = ''; }
             cur += sec;
         }
-        if (cur) chunks.push(cur);
+        cur += `© *POWERED BY ${botTitle}*`;
+        chunks.push(cur);
 
-        const contextInfo = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-                newsletterJid: UPDATE_CHANNEL_JID,
-                newsletterName: UPDATE_CHANNEL_NAME,
-                serverMessageId: 100
-            }
-        };
-
+        // no forwarded/newsletter info -> no "View channel" button on the menu
         try {
             await conn.sendMessage(from, {
                 image: require('../lib/botpic').getBotPic(conn),
-                caption: headerText,
-                contextInfo
+                caption: headerText.trimEnd()
             }, { quoted: mek });
         } catch (imgErr) {
-            await conn.sendMessage(from, { text: headerText, contextInfo }, { quoted: mek });
+            await conn.sendMessage(from, { text: headerText.trimEnd() }, { quoted: mek });
         }
         for (const chunk of chunks) {
-            await conn.sendMessage(from, { text: chunk.trimEnd() }, { quoted: mek });
+            await conn.sendMessage(from, { text: chunk.trimEnd() });
+            await new Promise(r => setTimeout(r, 500));
         }
     } catch (err) {
         console.error("AllMenu Error:", err);
