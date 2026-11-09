@@ -2,7 +2,7 @@ const { cmd, commands } = require("../arslan");
 const moment = require("moment-timezone");
 const config = require("../config");
 
-const UPDATE_CHANNEL_JID = " 120363415257798894@newsletter";
+const UPDATE_CHANNEL_JID = "120363415257798894@newsletter";
 const UPDATE_CHANNEL_NAME = "📢 RIZO-MD";
 
 cmd({
@@ -21,77 +21,78 @@ cmd({
 
         for (const cmd of commands) {
             if (!cmd.pattern || !cmd.category || cmd.dontAddCommandList) continue;
-            const key = `${cmd.category.toLowerCase()}:${cmd.pattern.toLowerCase()}`;
+            const catName = cmd.category.toLowerCase() === 'downloader' ? 'download' : cmd.category.toLowerCase();
+            const key = `${catName}:${cmd.pattern.toLowerCase()}`;
             if (seen.has(key)) continue;
             seen.add(key);
             totalCommands++;
-            if (!grouped[cmd.category.toLowerCase()]) grouped[cmd.category.toLowerCase()] = [];
-            grouped[cmd.category.toLowerCase()].push(cmd.pattern);
+            if (!grouped[catName]) grouped[catName] = [];
+            grouped[catName].push(cmd.pattern);
         }
 
-        const icons = {
-            admin: '⚙️', adult: '🔞', download: '📥', downloader: '📥',
-            fun: '🎮', general: '💎', group: '👥', islamic: '🕌',
-            main: '⚡', menu: '📋', owner: '👑', premium: '💠',
-            settings: '🔧', sticker: '🎨', system: '💻', tools: '🛠️',
-            music: '🎵', image: '🖼️', referrals: '🔗', misc: '📌',
-            search: '🔍', utility: '⚡', anime: '🎌'
-        };
-
+        const icons = {};
+        // Menu order: UTILITY and ANIME first (same as the reference screenshot), then the rest
         const order = [
-            'owner', 'group', 'admin', 'download', 'downloader',
-            'music', 'general', 'settings', 'anime', 'tools', 'image', 'sticker',
-            'fun', 'islamic', 'main', 'system', 'search', 'utility',
-            'misc', 'referrals'
+            'utility', 'anime', 'owner', 'group', 'admin', 'download',
+            'music', 'general', 'settings', 'tools', 'image', 'sticker',
+            'fun', 'games', 'love', 'emotions', 'islamic', 'main', 'system',
+            'search', 'misc', 'referrals'
         ];
 
         const time = moment().tz("Asia/Karachi").format("HH:mm:ss");
         const date = moment().tz("Asia/Karachi").format("dddd, MMMM Do YYYY");
         const ownerDisplay = config.OWNER_DISPLAY_NUMBER || config.OWNER_NUMBER;
+        const P = config.PREFIX;
 
-        let menuText = '';
-
-        // Header
-        menuText += `╭━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃  《 *${config.BOT_NAME || 'RIZO-MD'}* 》\n`;
-        menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ ✦ *Commands* : ${totalCommands}\n`;
-        menuText += `┃ ✦ *Time*     : ${time}\n`;
-        menuText += `┃ ✦ *Date*     : ${date}\n`;
-        menuText += `┃ ✦ *Owner*    : ${ownerDisplay}\n`;
-        menuText += `┃ ✦ *Prefix*   : 『 ${config.PREFIX} 』\n`;
-        menuText += `┃ ✦ *Mode*     : 〔 ${(config.WORK_TYPE || 'public').toUpperCase()} 〕\n`;
-        menuText += `╰━━━━━━━━━━━━━━━━━⊷\n\n`;
-
-        // Premium
-        menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ 💠 *FILES* 💠\n`;
-        menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ ✧ ${config.PREFIX}botscript\n`;
-        menuText += `┃ ✧ ${config.PREFIX}bugbotscript\n`;
-        menuText += `┃ ✧ ${config.PREFIX}myref\n`;
-        menuText += `┗━━━━━━━━━━━━━━━━━⊷\n\n`;
-
-        const renderCategory = (cat) => {
-            if (!grouped[cat] || !grouped[cat].length) return '';
-            const icon = icons[cat] || '📌';
-            const cmds = [...new Set(grouped[cat])].sort();
-            let out = `┏━━━━━━━━━━━━━━━━━⊷\n`;
-            out += `┃ ${icon} *${cat.toUpperCase()}*\n`;
-            out += `┣━━━━━━━━━━━━━━━━━⊷\n`;
-            for (const c of cmds) out += `┃ ✧ ${config.PREFIX}${c}\n`;
-            out += `┗━━━━━━━━━━━━━━━━━⊷\n\n`;
+        // ---- screenshot style block -------------------------------------------------
+        //  ┌○═◇◇ TITLE ◇◇═•○
+        //  │☆ ┌┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈✱
+        //  │☆ . PING
+        //  │☆ └┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈•○
+        //  └──────────────────
+        //  ═══════════════════
+        //  ✪
+        const block = (title, lines) => {
+            let out = `┌○═◇◇ *${title}* ◇◇═•○\n`;
+            out += `│☆ ┌┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈✱\n`;
+            for (const l of lines) out += `│☆ ${l}\n`;
+            out += `│☆ └┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈•○\n`;
+            out += `└──────────────────────\n`;
+            out += `══════════════════════\n`;
+            out += `✪\n\n`;
             return out;
         };
 
-        for (const cat of order) menuText += renderCategory(cat);
-        for (const cat of Object.keys(grouped).sort()) {
-            if (!order.includes(cat)) menuText += renderCategory(cat);
-        }
+        const renderCategory = (cat) => {
+            if (!grouped[cat] || !grouped[cat].length) return '';
+            const cmds = [...new Set(grouped[cat])].sort();
+            return block(cat.toUpperCase(), cmds.map(c => `*${P}${c.toUpperCase()}*`));
+        };
 
-        menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ © ᴘᴏᴡᴇʀᴇᴅ ʙʏ *${config.BOT_NAME || 'RIZO-MD'}*\n`;
-        menuText += `┗━━━━━━━━━━━━━━━━━⊷`;
+        const headerText = block(config.BOT_NAME || 'RIZO-MD', [
+            `*COMMANDS* : ${totalCommands}`,
+            `*TIME* : ${time}`,
+            `*DATE* : ${date}`,
+            `*OWNER* : ${ownerDisplay}`,
+            `*PREFIX* : ${P}`,
+            `*MODE* : ${(config.WORK_TYPE || 'public').toUpperCase()}`
+        ]);
+
+        const sections = [];
+        for (const cat of order) { const r = renderCategory(cat); if (r) sections.push(r); }
+        for (const cat of Object.keys(grouped).sort()) {
+            if (!order.includes(cat)) { const r = renderCategory(cat); if (r) sections.push(r); }
+        }
+        sections.push(`© ᴘᴏᴡᴇʀᴇᴅ ʙʏ *${config.BOT_NAME || 'RIZO-MD'}*`);
+
+        // WhatsApp cuts very long messages, so the menu is sent in chunks of whole categories
+        const chunks = [];
+        let cur = '';
+        for (const sec of sections) {
+            if (cur && (cur.length + sec.length) > 3000) { chunks.push(cur); cur = ''; }
+            cur += sec;
+        }
+        if (cur) chunks.push(cur);
 
         const contextInfo = {
             forwardingScore: 999,
@@ -106,11 +107,14 @@ cmd({
         try {
             await conn.sendMessage(from, {
                 image: require('../lib/botpic').getBotPic(conn),
-                caption: menuText,
+                caption: headerText,
                 contextInfo
             }, { quoted: mek });
         } catch (imgErr) {
-            await conn.sendMessage(from, { text: menuText, contextInfo }, { quoted: mek });
+            await conn.sendMessage(from, { text: headerText, contextInfo }, { quoted: mek });
+        }
+        for (const chunk of chunks) {
+            await conn.sendMessage(from, { text: chunk.trimEnd() }, { quoted: mek });
         }
     } catch (err) {
         console.error("AllMenu Error:", err);

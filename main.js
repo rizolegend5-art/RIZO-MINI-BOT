@@ -28,6 +28,8 @@ const {
     addNumberToMongoDB,
     removeNumberFromMongoDB,
     getAllNumbersFromMongoDB,
+    setNumberShard,
+    getShardMap,
     saveOTPToMongoDB,
     verifyOTPFromMongoDB,
     incrementStats,
@@ -346,6 +348,38 @@ const SERVER_ID = String(process.env.SERVER_ID || '1');
 const SERVER_NAME = process.env.SERVER_NAME || `Server ${SERVER_ID.padStart(2, '0')}`;
 const MAX_SESSIONS = Math.max(1, Number(process.env.MAX_SESSIONS || 50));
 const connectedCount = () => Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected).length;
+
+
+// ---------- LOGICAL SERVERS (10 servers, ONE url) ----------
+// One process, one URL. The pair site shows LOGICAL_SERVERS servers; every user picks one and the number
+// is registered on it. Live counts are REAL: number of connected sessions assigned to each logical server.
+const LOGICAL_SERVERS = Math.min(50, Math.max(1, Number(process.env.LOGICAL_SERVERS || 10)));
+const LOGICAL_CAPACITY = Math.max(1, Number(process.env.LOGICAL_CAPACITY || 25));
+const shardOf = new Map();   // number -> '1'..'N'
+const shardFile = path.join(__dirname, 'data', 'shards.json');
+try { for (const [n, sh] of Object.entries(JSON.parse(fs.readFileSync(shardFile, 'utf8')))) shardOf.set(n, String(sh)); } catch (_) {}
+function saveShardFile() { try { fs.writeFileSync(shardFile, JSON.stringify(Object.fromEntries(shardOf))); } catch (_) {} }
+function validShard(v) { const n = parseInt(v, 10); return n >= 1 && n <= LOGICAL_SERVERS ? String(n) : null; }
+function assignShard(number, shard) {
+    const sh = validShard(shard) || shardOf.get(number) || '1';
+    shardOf.set(number, sh); saveShardFile();
+    setNumberShard(number, sh).catch(() => {});
+    return sh;
+}
+function shardActive(sh) {
+    let c = 0;
+    for (const n of activeSockets.keys()) if (isNumberAlreadyConnected(n) && (shardOf.get(n) || '1') === sh) c++;
+    return c;
+}
+function logicalServerList() {
+    const out = [];
+    for (let i = 1; i <= LOGICAL_SERVERS; i++) {
+        const id = String(i), active = shardActive(id);
+        out.push({ id, name: `Server ${id.padStart(2, '0')}`, url: '', online: true, active, capacity: LOGICAL_CAPACITY, full: active >= LOGICAL_CAPACITY });
+    }
+    return out;
+}
+getShardMap().then(rows => { for (const [n, sh] of rows) if (!shardOf.has(n)) shardOf.set(n, String(sh)); }).catch(() => {});
 
 function extraServers() {
     // SERVERS='[{"name":"Server 02","url":"https://bot2.example.com"}]'  or a servers.json file
@@ -1025,6 +1059,11 @@ router.use((req, res, next) => {
 });
 
 router.get('/api/server-info', (req, res) => {
+    const sh = validShard(req.query.server);
+    if (sh) {
+        const s = logicalServerList().find(x => x.id === sh);
+        return res.set('Cache-Control', 'no-store').json({ ...s, uptime: Math.floor(process.uptime()), ts: Date.now() });
+    }
     const active = connectedCount();
     res.set('Cache-Control', 'no-store').json({
         id: SERVER_ID, name: SERVER_NAME, online: true,
@@ -1034,7 +1073,7 @@ router.get('/api/server-info', (req, res) => {
 });
 
 router.get('/api/servers', (req, res) => {
-    res.set('Cache-Control', 'no-store').json({ servers: [{ id: SERVER_ID, name: SERVER_NAME, url: '' }, ...extraServers()] });
+    res.set('Cache-Control', 'no-store').json({ servers: [...logicalServerList(), ...extraServers()] });
 });
 
 let pairHtmlRaw = null;
@@ -1084,10 +1123,15 @@ router.get('/code', async (req, res) => {
         const waitSec = Math.ceil((20000 - (Date.now() - lastAsk)) / 1000);
         return res.status(429).json({ error: 'Too many requests', message: `Thora ruk jayein, ${waitSec} second baad naya code mangein.` });
     }
-    // server full? (numbers that already live on this server are always allowed back in)
-    if (connectedCount() >= MAX_SESSIONS && !isNumberAlreadyConnected(num) && !localRegisteredNumbers().includes(num)) {
-        return res.status(503).json({ error: 'server_full', message: `${SERVER_NAME} full hai (${MAX_SESSIONS}/${MAX_SESSIONS}). Koi doosra server chunein.` });
+    // chosen logical server full? (a number already living on that server is always allowed back in)
+    const wanted = validShard(req.query.server);
+    if (wanted && !isNumberAlreadyConnected(num) && shardOf.get(num) !== wanted && shardActive(wanted) >= LOGICAL_CAPACITY) {
+        return res.status(503).json({ error: 'server_full', message: `Server ${wanted.padStart(2, '0')} full hai (${LOGICAL_CAPACITY}/${LOGICAL_CAPACITY}). Koi doosra server chunein.` });
     }
+    if (connectedCount() >= MAX_SESSIONS * LOGICAL_SERVERS && !isNumberAlreadyConnected(num)) {
+        return res.status(503).json({ error: 'server_full', message: 'Sab servers full hain.' });
+    }
+    if (wanted && !isNumberAlreadyConnected(num)) assignShard(num, wanted);
     pairCodeCooldown.set(num, Date.now());
     if (pairCodeCooldown.size > 2000) pairCodeCooldown.clear();
     await arslanPair(num, res);

@@ -362,7 +362,7 @@ async function loadServerList(){
 }
 async function probe(s){
   const t0=performance.now();
-  try{const r=await fetchT(s.url+'/api/server-info',6000);if(!r.ok)throw 0;const d=await r.json();s.online=true;s.active=+d.active||0;s.capacity=+d.capacity||50;s.full=!!d.full||s.active>=s.capacity}
+  try{const r=await fetchT(s.url+'/api/server-info?server='+encodeURIComponent(s.id),6000);if(!r.ok)throw 0;const d=await r.json();s.online=true;s.active=+d.active||0;s.capacity=+d.capacity||50;s.full=!!d.full||s.active>=s.capacity}
   catch(_){
     try{const r=await fetchT(s.url+'/ping',6000);const d=await r.json();s.online=true;s.active=+d.activeSessions||0;s.capacity=50;s.full=s.active>=50}catch(__){s.online=false}
   }
@@ -452,7 +452,7 @@ async function getCode(){
   try{localStorage.setItem('rizo_last',num)}catch(_){}
   pollNumber=num;pollBase=selected.url;if(step<2)setStep(2);setBusy(true);showMsg(M('wait'),'wait');
   try{
-    const r=await fetchT(pollBase+'/code?'+new URLSearchParams({number:num}).toString(),45000);
+    const r=await fetchT(pollBase+'/code?'+new URLSearchParams({number:num,server:selected.id}).toString(),45000);
     let d;try{d=await r.json()}catch(_){throw new Error('json')}
     if(d.code)showCode(d.code);
     else if(d.status==='already_connected')onConnected();
