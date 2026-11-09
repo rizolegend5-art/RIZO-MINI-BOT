@@ -70,6 +70,7 @@ module.exports = {
     CHANNEL_LINK: "https://whatsapp.com/channel/0029VbE72MB2Jl87sS5pvR0g",
 
     // ===========================================================
+    UPDATE_CHANNEL_URL: "https://whatsapp.com/channel/0029VbE72MB2Jl87sS5pvR0g",
     // 8. EXTERNAL API (Optionnel)
     // ===========================================================
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "",

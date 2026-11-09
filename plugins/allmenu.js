@@ -1,9 +1,10 @@
+
 const { cmd, commands } = require("../arslan");
 const moment = require("moment-timezone");
 const config = require("../config");
 
-const UPDATE_CHANNEL_JID = "120363415257798894@newsletter";
-const UPDATE_CHANNEL_NAME = "📢 RIZO-MD";
+// APNA CHANNEL LINK YAHAN LAGAO
+const UPDATE_CHANNEL_URL = "https://whatsapp.com/channel/0029VbE72MB2Jl87sS5pvR0g";
 
 cmd({
     pattern: "menu",
@@ -15,109 +16,131 @@ cmd({
 }, async (conn, mek, m, ctx) => {
     try {
         const from = ctx.from || m.chat;
-        let totalCommands = 0;
         const grouped = {};
         const seen = new Set();
+        let totalCommands = 0;
 
-        for (const cmd of commands) {
-            if (!cmd.pattern || !cmd.category || cmd.dontAddCommandList) continue;
-            const catName = cmd.category.toLowerCase() === 'downloader' ? 'download' : cmd.category.toLowerCase();
-            const key = `${catName}:${cmd.pattern.toLowerCase()}`;
+        // COLLECT COMMANDS
+        for (const command of commands) {
+            if (
+                !command.pattern ||
+                !command.category ||
+                command.dontAddCommandList
+            ) continue;
+
+            const cat = command.category.toLowerCase() === "downloader"
+                ? "download"
+                : command.category.toLowerCase();
+
+            const key = `${cat}:${command.pattern.toLowerCase()}`;
+
             if (seen.has(key)) continue;
+
             seen.add(key);
             totalCommands++;
-            if (!grouped[catName]) grouped[catName] = [];
-            grouped[catName].push(cmd.pattern);
+
+            if (!grouped[cat]) grouped[cat] = [];
+
+            grouped[cat].push(command.pattern);
         }
 
-        const icons = {};
-        // Menu order: UTILITY and ANIME first (same as the reference screenshot), then the rest
         const order = [
-            'utility', 'anime', 'owner', 'group', 'admin', 'download',
-            'music', 'general', 'settings', 'tools', 'image', 'sticker',
-            'fun', 'games', 'love', 'emotions', 'islamic', 'main', 'system',
-            'search', 'misc', 'referrals'
+            "utility", "anime", "owner", "group",
+            "admin", "download", "music", "general",
+            "settings", "tools", "image", "sticker",
+            "fun", "games", "love", "emotions",
+            "islamic", "main", "system", "search",
+            "misc", "referrals"
         ];
 
         const time = moment().tz("Asia/Karachi").format("HH:mm:ss");
-        const date = moment().tz("Asia/Karachi").format("dddd, MMMM Do YYYY");
-        const ownerDisplay = config.OWNER_DISPLAY_NUMBER || config.OWNER_NUMBER;
-        const P = config.PREFIX;
+        const date = moment().tz("Asia/Karachi").format("DD MMMM YYYY");
 
-        // ---- screenshot style block -------------------------------------------------
-        //  ┌○═◇◇ TITLE ◇◇═•○
-        //  │☆ ┌┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈✱
-        //  │☆ . PING
-        //  │☆ └┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈•○
-        //  └──────────────────
-        //  ═══════════════════
-        //  ✪
-        // short lines on purpose: long dashed lines wrap on phones and break the box
-        const block = (title, lines) => {
-            let out = `┌○═◇◇ *${title}* ◇◇═•○\n`;
-            out += `│☆ ┌┈┈┈┈┈┈┈┈┈┈┈┈┈┈✱\n`;
-            for (const l of lines) out += `│☆ ${l}\n`;
-            out += `│☆ └┈┈┈┈┈┈┈┈┈┈┈┈┈┈•○\n`;
-            out += `└────────────────\n`;
-            out += `════════════════\n`;
-            out += `✪\n\n`;
-            return out;
-        };
+        const P = config.PREFIX || ".";
+        const owner = config.OWNER_DISPLAY_NUMBER || config.OWNER_NUMBER || "Owner";
+        const botName = String(config.BOT_NAME || "RIZO-MD").toUpperCase();
 
-        const PAGE = 30;   // commands per box; a category is never cut in the middle of a box
-        const renderCategory = (cat) => {
-            if (!grouped[cat] || !grouped[cat].length) return [];
-            const cmds = [...new Set(grouped[cat])].sort().map(c => `*${P}${c.toUpperCase()}*`);
-            const pages = Math.ceil(cmds.length / PAGE);
-            const out = [];
-            for (let i = 0; i < pages; i++) {
-                const title = pages > 1 ? `${cat.toUpperCase()} ${i + 1}/${pages}` : cat.toUpperCase();
-                out.push(block(title, cmds.slice(i * PAGE, (i + 1) * PAGE)));
+        // MENU BOX DESIGN
+        function makeBox(title, lines) {
+            let text = `┌○═◇◇ *${title}* ◇◇═•○\n`;
+            text += `│☆ ┌┈┈┈┈┈┈┈┈┈┈┈┈┈┈✱\n`;
+
+            for (const line of lines) {
+                text += `│☆ ${line}\n`;
             }
-            return out;
-        };
 
-        const botTitle = String(config.BOT_NAME || 'RIZO-MD').toUpperCase();
-        const headerText = block(botTitle.length > 10 ? 'RIZO-MD' : botTitle, [
+            text += `│☆ └┈┈┈┈┈┈┈┈┈┈┈┈┈┈•○\n`;
+            text += `└────────────────\n`;
+            text += `════════════════\n`;
+            text += `✪\n\n`;
+
+            return text;
+        }
+
+        // HEADER
+        let menu = makeBox("RIZO-MD MENU", [
+            `*BOT* : *${botName}*`,
             `*COMMANDS* : *${totalCommands}*`,
             `*TIME* : *${time}*`,
-            `*DATE* : *${date.toUpperCase()}*`,
-            `*OWNER* : *${ownerDisplay}*`,
+            `*DATE* : *${date}*`,
+            `*OWNER* : *${owner}*`,
             `*PREFIX* : *${P}*`,
-            `*MODE* : *${(config.WORK_TYPE || 'public').toUpperCase()}*`
+            `*MODE* : *${config.WORK_TYPE || "PUBLIC"}*`
         ]);
 
-        const sections = [];
-        for (const cat of order) sections.push(...renderCategory(cat));
-        for (const cat of Object.keys(grouped).sort()) {
-            if (!order.includes(cat)) sections.push(...renderCategory(cat));
+        // SORT CATEGORIES
+        const categories = [
+            ...order.filter(cat => grouped[cat]),
+            ...Object.keys(grouped)
+                .filter(cat => !order.includes(cat))
+                .sort()
+        ];
+
+        // ADD ALL COMMANDS
+        for (const cat of categories) {
+            const list = [...new Set(grouped[cat])]
+                .sort()
+                .map(cmd => `*${P}${cmd.toUpperCase()}*`);
+
+            menu += makeBox(cat.toUpperCase(), list);
         }
 
-        // pack whole boxes into messages (never split a box)
-        const chunks = [];
-        let cur = '';
-        for (const sec of sections) {
-            if (cur && (cur.length + sec.length) > 2800) { chunks.push(cur); cur = ''; }
-            cur += sec;
-        }
-        cur += `© *POWERED BY ${botTitle}*`;
-        chunks.push(cur);
+        menu += `\n© *POWERED BY ${botName}*`;
 
-        // no forwarded/newsletter info -> no "View channel" button on the menu
+        // VIEW CHANNEL BUTTON
+        const buttons = [];
+
+        if (
+            UPDATE_CHANNEL_URL.startsWith(
+                "https://whatsapp.com/channel/"
+            ) &&
+            !UPDATE_CHANNEL_URL.includes("YOUR_CHANNEL_ID")
+        ) {
+            buttons.push({
+                index: 1,
+                urlButton: {
+                    displayText: "📢 VIEW CHANNEL",
+                    url: UPDATE_CHANNEL_URL
+                }
+            });
+        }
+
+        // SEND ONE COMPLETE MENU
+        const message = {
+            text: menu,
+            footer: `${botName} | Official Menu`,
+            ...(buttons.length ? { templateButtons: buttons } : {})
+        };
+
+        await conn.sendMessage(from, message, {
+            quoted: mek
+        });
+
+    } catch (error) {
+        console.error("MENU ERROR:", error);
+
         try {
-            await conn.sendMessage(from, {
-                image: require('../lib/botpic').getBotPic(conn),
-                caption: headerText.trimEnd()
-            }, { quoted: mek });
-        } catch (imgErr) {
-            await conn.sendMessage(from, { text: headerText.trimEnd() }, { quoted: mek });
-        }
-        for (const chunk of chunks) {
-            await conn.sendMessage(from, { text: chunk.trimEnd() });
-            await new Promise(r => setTimeout(r, 500));
-        }
-    } catch (err) {
-        console.error("AllMenu Error:", err);
-        try { await ctx.reply("❌ Menu error."); } catch (_) {}
+            await ctx.reply("❌ Menu Error: " + error.message);
+        } catch (e) {}
     }
 });
