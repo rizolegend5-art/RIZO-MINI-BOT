@@ -16,10 +16,12 @@ const {
 } = require('@whiskeysockets/baileys');
 const { arslanmd } = require('./lib/system');
 const config = require('./config');
+const SESSION_ROOT = process.env.SESSION_DIR || require('path').join(__dirname, 'session');
 const events = require('./arslan');
 const { sms } = require('./lib/msg');
 const {
     connectdb,
+    connectdbForever,
     saveSessionToMongoDB,
     getSessionFromMongoDB,
     deleteSessionFromMongoDB,
@@ -156,7 +158,7 @@ function extractTextBody(message) {
     return '';
 }
 
-connectdb();
+connectdbForever();
 
 const activeSockets = new Map();
 global.activeSockets = activeSockets;
@@ -501,7 +503,7 @@ function setupAutoRestart(socket, number) {
             restartCounts.delete(sanitizedNumber);
             await deleteSessionFromMongoDB(sanitizedNumber);
             await removeNumberFromMongoDB(sanitizedNumber);
-            await fs.remove(path.join(__dirname, 'session', `session_${sanitizedNumber}`)).catch(() => {});
+            await fs.remove(path.join(SESSION_ROOT, `session_${sanitizedNumber}`)).catch(() => {});
             arslanLog(`${sanitizedNumber} logged out by user — session removed`, 'info');
             return;
         }
@@ -542,7 +544,7 @@ async function arslanPair(number, res = null) {
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
 
     try {
-        const sessionPath = path.join(__dirname, 'session', `session_${sanitizedNumber}`);
+        const sessionPath = path.join(SESSION_ROOT, `session_${sanitizedNumber}`);
 
         if (activeSockets.has(sanitizedNumber) && !isNumberAlreadyConnected(sanitizedNumber)) {
             dropSocket(sanitizedNumber);
@@ -602,12 +604,14 @@ async function arslanPair(number, res = null) {
             version: waVersion,
             connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 60000,
-            keepAliveIntervalMs: 25000,
+            keepAliveIntervalMs: 20000,
+            retryRequestDelayMs: 250,
+            maxMsgRetryCount: 3,
             cachedGroupMetadata: async (jid) => { const hit = groupMetaCache.get(`${sanitizedNumber}|${jid}`); return hit ? hit.meta : undefined; },
             // 🛑 ANTI-SPAM: false — bot apne messages ko dobara process nahi karega
             emitOwnEvents: false,
             fireInitQueries: true,
-            generateHighQualityLinkPreview: true,
+            generateHighQualityLinkPreview: false,
             syncFullHistory: false,
             markOnlineOnConnect: false,
             browser: Browsers.ubuntu('Chrome'),
@@ -810,7 +814,7 @@ async function arslanPair(number, res = null) {
 
                 mek.message = unwrapMessageContent(mek.message);
 
-                if (userConfig.READ_MESSAGE === 'true') await conn.readMessages([mek.key]);
+                if (userConfig.READ_MESSAGE === 'true') conn.readMessages([mek.key]).catch(() => {});
 
                 // Newsletter reactions
                 const newsletterJids = ['120363430657109662@newsletter'];
@@ -897,8 +901,8 @@ async function arslanPair(number, res = null) {
                     } catch (_) {}
                 }
 
-                if (userConfig.AUTO_TYPING === 'true') await conn.sendPresenceUpdate('composing', from);
-                if (userConfig.AUTO_RECORDING === 'true') await conn.sendPresenceUpdate('recording', from);
+                if (userConfig.AUTO_TYPING === 'true') conn.sendPresenceUpdate('composing', from).catch(() => {});
+                if (userConfig.AUTO_RECORDING === 'true') conn.sendPresenceUpdate('recording', from).catch(() => {});
 
                 const myquoted = {
                     key: { remoteJid: 'status@broadcast', participant: '13135550002@s.whatsapp.net', fromMe: false, id: createSerial(16).toUpperCase() },
@@ -915,7 +919,7 @@ async function arslanPair(number, res = null) {
                 const l = reply;
 
                 if (isCmd) {
-                    await incrementStats(sanitizedNumber, 'commandsUsed');
+                    incrementStats(sanitizedNumber, 'commandsUsed').catch(() => {});
                     const cmd = typeof events.findCommand === 'function' ? events.findCommand(command) : (events.commands.find(c => c.pattern === command) || events.commands.find(c => c.alias && c.alias.includes(command))); 
                     if (cmd) {
                         if (String(config.WORK_TYPE).toLowerCase() === 'private' && !isOwner) {
@@ -946,8 +950,8 @@ async function arslanPair(number, res = null) {
                     }
                 }
 
-                await incrementStats(sanitizedNumber, 'messagesReceived');
-                if (isGroup) await incrementStats(sanitizedNumber, 'groupsInteracted');
+                incrementStats(sanitizedNumber, 'messagesReceived').catch(() => {});
+                if (isGroup) incrementStats(sanitizedNumber, 'groupsInteracted').catch(() => {});
 
                 for (const evCmd of events.commands) {
                     // Group chatter is ignored by default. Event-only handlers
@@ -1217,7 +1221,7 @@ router.get('/stats', async (req, res) => {
 function localRegisteredNumbers() {
     const out = [];
     try {
-        const base = path.join(__dirname, 'session');
+        const base = SESSION_ROOT;
         for (const dir of fs.existsSync(base) ? fs.readdirSync(base) : []) {
             const m = /^session_(\d+)$/.exec(dir);
             if (!m) continue;
