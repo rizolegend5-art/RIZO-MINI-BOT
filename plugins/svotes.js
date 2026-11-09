@@ -58,6 +58,7 @@ ${P}svotes <poll-link> list     → poll ke options dekho
 
     const sessions = reactor.getConnectedSockets();
     if (!sessions.length) return ctx.reply('❌ Koi connected session nahi mila.');
+    { const w = reactor.massCooldown('v:' + ctx.from); if (w) return ctx.reply(`⏳ ${w} second baad dobara chalayein (account safety ke liye).`); }
     await ctx.reply('🔎 Poll dhoond raha hoon...');
 
     // resolve channel (try this session first, then the others)
@@ -132,6 +133,19 @@ Vote: ${P}svotes <link> 1`
 
     if (!res.ok) {
         const why = Object.keys(res.errors || {})[0] || res.error || 'unknown';
+        if (/not available/i.test(why)) {
+            return ctx.reply(
+`❌ *Channel poll par vote nahi ja sakta.*
+
+🔧 Wajah: bot ki WhatsApp library (Baileys 7.0.0-rc14) mein channel poll vote bhejne ka tareeqa maujood hi nahi.
+
+⚠️ Pehle jo "Success" aata tha wo galat tha: request chali jati thi lekin vote count nahi hota tha (aap ke screenshot mein poll 0 hi raha). Is ghalti ke liye maazrat.
+
+✅ *Jo asal mein kaam karta hai:*
+• ${P}sreacts <channel-post-link> ❤️ 🔥  → saare sessions reaction lagate hain
+• Group mein reply karke ${P}sreacts sticker ❤️`
+            );
+        }
         return ctx.reply(`❌ Kisi session se vote nahi hua.\nReason: ${why}\n\n💡 Channel follow nahi kiya to \`${P}svotes <link> ${rest[0]} follow\` try karo.`);
     }
 

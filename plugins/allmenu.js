@@ -2,8 +2,8 @@ const { cmd, commands } = require("../arslan");
 const moment = require("moment-timezone");
 const config = require("../config");
 
-const UPDATE_CHANNEL_JID = " 120363412624902256@newsletter";
-const UPDATE_CHANNEL_NAME = "📢 RIZO-X AMAN MD UPDATES";
+const UPDATE_CHANNEL_JID = " 120363415257798894@newsletter";
+const UPDATE_CHANNEL_NAME = "📢 RIZO-MD";
 
 cmd({
     pattern: "menu",
@@ -39,9 +39,9 @@ cmd({
         };
 
         const order = [
-            'owner', 'admin', 'group', 'download', 'downloader',
-            'music', 'islamic', 'fun', 'anime', 'tools', 'image', 'sticker',
-            'settings', 'general', 'main', 'system', 'search', 'utility',
+            'owner', 'group', 'admin', 'download', 'downloader',
+            'music', 'general', 'settings', 'anime', 'tools', 'image', 'sticker',
+            'fun', 'islamic', 'main', 'system', 'search', 'utility',
             'misc', 'referrals'
         ];
 
@@ -53,7 +53,7 @@ cmd({
 
         // Header
         menuText += `╭━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃  《 *${config.BOT_NAME || 'RIZO X AMAN-MD'}* 》\n`;
+        menuText += `┃  《 *${config.BOT_NAME || 'RIZO-MD'}* 》\n`;
         menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
         menuText += `┃ ✦ *Commands* : ${totalCommands}\n`;
         menuText += `┃ ✦ *Time*     : ${time}\n`;
@@ -65,7 +65,7 @@ cmd({
 
         // Premium
         menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ 💠 *PREMIUM* 💠\n`;
+        menuText += `┃ 💠 *FILES* 💠\n`;
         menuText += `┣━━━━━━━━━━━━━━━━━⊷\n`;
         menuText += `┃ ✧ ${config.PREFIX}botscript\n`;
         menuText += `┃ ✧ ${config.PREFIX}bugbotscript\n`;
@@ -90,7 +90,7 @@ cmd({
         }
 
         menuText += `┏━━━━━━━━━━━━━━━━━⊷\n`;
-        menuText += `┃ © ᴘᴏᴡᴇʀᴇᴅ ʙʏ *${config.BOT_NAME || 'RIZO X AMAN -MD'}*\n`;
+        menuText += `┃ © ᴘᴏᴡᴇʀᴇᴅ ʙʏ *${config.BOT_NAME || 'RIZO-MD'}*\n`;
         menuText += `┗━━━━━━━━━━━━━━━━━⊷`;
 
         const contextInfo = {
@@ -105,7 +105,7 @@ cmd({
 
         try {
             await conn.sendMessage(from, {
-                image: { url: config.IMAGE_PATH },
+                image: require('../lib/botpic').getBotPic(conn),
                 caption: menuText,
                 contextInfo
             }, { quoted: mek });

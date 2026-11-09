@@ -32,6 +32,7 @@ async function handleSreacts(conn, mek, m, ctx) {
     const stanzaId = qctx?.stanzaId || ci?.stanzaId;
     const quotedParticipant = qctx?.participant || ci?.participant;
     if (stanzaId && !/whatsapp\.com\/channel\//i.test(q)) {
+        { const w = reactor.massCooldown('r:' + ctx.from); if (w) return ctx.reply(`⏳ ${w} second baad dobara chalayein (account safety ke liye).`); }
         const chatJid = ctx.from;
         const key = {
             remoteJid: chatJid,
@@ -98,6 +99,7 @@ ${P}sreacts <channel-post-link> ❤️ follow\n(Group mein kisi message ko *repl
     if (!sessions.length) return ctx.reply('❌ Koi connected session nahi mila.');
 
     // Resolve with the session that sent the command, fall back to any other session
+    { const w = reactor.massCooldown('r:' + ctx.from); if (w) return ctx.reply(`⏳ ${w} second baad dobara chalayein (account safety ke liye).`); }
     let resolved = await reactor.resolveChannelLink(conn, link);
     if (!resolved.ok) {
         for (const s of sessions) {

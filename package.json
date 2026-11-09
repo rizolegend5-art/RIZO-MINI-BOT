@@ -1,11 +1,11 @@
 {
-  "name": "RIZO X AMAN-MD-bot",
-  "version": "2.6.1",
+  "name": "RIZO-MD-bot",
+  "version": "2.9.0",
   "description": "RIZO HELL-MD WhatsApp Bot — persistent settings, anime metadata and video-link commands",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "check": "node --check index.js && node --check main.js && node --check config.js && node --check arslan.js && node --check plugins/song.js && node --check plugins/anime.js && node --check plugins/anime-extra-20.js && node --check plugins/anime-video-pack.js && node --check plugins/drama.js && node --check plugins/sreacts.js && node --check plugins/arcadd.js && node --check plugins/svotes.js && node --check plugins/islamic-cartoon-dl.js && node --check lib/pollvoter.js && node --check lib/media-dl.js && node --check lib/anime-api.js && node --check lib/reactor.js",
+    "check": "node --check index.js && node --check main.js && node --check config.js && node --check arslan.js && node --check plugins/song.js && node --check plugins/anime.js && node --check plugins/anime-extra-20.js && node --check plugins/anime-video-pack.js && node --check plugins/drama.js && node --check plugins/sreacts.js && node --check plugins/svotes.js && node --check plugins/islamic-cartoon-dl.js && node --check lib/pollvoter.js && node --check lib/media-dl.js && node --check lib/anime-api.js && node --check lib/reactor.js && node --check lib/welcome.js && node --check lib/botpic.js && node --check plugins/welcome-pro.js && node --check plugins/nettest.js && node --check plugins/sfollow.js",
     "check:islamic": "node --check plugins/islamic-rizo-30-pack.js",
     "check:anime": "node --check plugins/anime.js && node --check plugins/anime-extra-20.js && node --check plugins/anime-video-pack.js",
     "check:music": "node --check plugins/song.js",

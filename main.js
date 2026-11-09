@@ -275,6 +275,99 @@ function dropSocket(n) {
 
 const restartCounts = new Map();
 
+// ===========================================================
+// SPEED & SAFETY HELPERS
+// ===========================================================
+// 1) Group metadata cache — before, EVERY group message did a live groupMetadata() query
+//    (slow, and a classic WhatsApp rate-limit / ban trigger when many sessions are online).
+const groupMetaCache = new Map();           // "number|jid" -> { at, meta }
+const GROUP_META_TTL_MS = 5 * 60 * 1000;
+async function getGroupMetaCached(conn, number, jid) {
+    const key = `${number}|${jid}`;
+    const hit = groupMetaCache.get(key);
+    if (hit && Date.now() - hit.at < GROUP_META_TTL_MS) return hit.meta;
+    const meta = await conn.groupMetadata(jid);
+    groupMetaCache.set(key, { at: Date.now(), meta });
+    if (groupMetaCache.size > 3000) {
+        const cutoff = Date.now() - GROUP_META_TTL_MS;
+        for (const [k, v] of groupMetaCache) if (v.at < cutoff) groupMetaCache.delete(k);
+    }
+    return meta;
+}
+const invalidateGroupMeta = (number, jid) => groupMetaCache.delete(`${number}|${jid}`);
+
+// 2) Auto status-like is limited per session (mass automatic reactions get numbers banned)
+const STATUS_LIKES_PER_HOUR = Number(process.env.STATUS_LIKES_PER_HOUR || 20);
+const statusLikeLog = new Map();
+function canLikeStatus(number) {
+    const now = Date.now();
+    const recent = (statusLikeLog.get(number) || []).filter(t => now - t < 3600000);
+    if (recent.length >= STATUS_LIKES_PER_HOUR) { statusLikeLog.set(number, recent); return false; }
+    recent.push(now);
+    statusLikeLog.set(number, recent);
+    return true;
+}
+
+// 3) Outgoing messages are spaced 0.5–1.0 s apart per session (like a human, not a flood)
+function applySendThrottle(conn) {
+    if (conn.__throttled) return;
+    conn.__throttled = true;
+    const originalSend = conn.sendMessage.bind(conn);
+    let nextAt = 0;
+    conn.sendMessage = async (jid, content, options) => {
+        const now = Date.now();
+        const at = Math.max(now, nextAt);
+        nextAt = at + 500 + Math.floor(Math.random() * 500);
+        if (at > now) await delay(at - now);
+        return originalSend(jid, content, options);
+    };
+}
+
+// 4) WhatsApp Web version is cached (it used to be downloaded on every single connect)
+let waVersionCache = { at: 0, version: null };
+async function getWaVersion() {
+    if (waVersionCache.version && Date.now() - waVersionCache.at < 6 * 3600 * 1000) return waVersionCache.version;
+    try {
+        const v = (await fetchLatestBaileysVersion()).version;
+        waVersionCache = { at: Date.now(), version: v };
+        return v;
+    } catch (_) {
+        return waVersionCache.version || [2, 3000, 1033105955];
+    }
+}
+
+// 5) /code (pair website): same number can ask for a new code only every 20 s
+const pairCodeCooldown = new Map();
+
+// ---------- multi-server pairing site ----------
+// Run several copies of this bot (different hosts). Each copy has its own SERVER_ID / SERVER_NAME /
+// MAX_SESSIONS. The pair website lists them and shows REAL live numbers from each one.
+const SERVER_ID = String(process.env.SERVER_ID || '1');
+const SERVER_NAME = process.env.SERVER_NAME || `Server ${SERVER_ID.padStart(2, '0')}`;
+const MAX_SESSIONS = Math.max(1, Number(process.env.MAX_SESSIONS || 50));
+const connectedCount = () => Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected).length;
+
+function extraServers() {
+    // SERVERS='[{"name":"Server 02","url":"https://bot2.example.com"}]'  or a servers.json file
+    let list = [];
+    try {
+        if (process.env.SERVERS) list = JSON.parse(process.env.SERVERS);
+        else if (fs.existsSync(path.join(__dirname, 'servers.json'))) list = JSON.parse(fs.readFileSync(path.join(__dirname, 'servers.json'), 'utf8'));
+    } catch (e) { arslanLog(`servers list invalid: ${e.message}`, 'warning'); }
+    return (Array.isArray(list) ? list : [])
+        .filter(x => x && typeof x.url === 'string' && /^https?:\/\//i.test(x.url))
+        .map(x => ({ name: String(x.name || x.url).slice(0, 40), url: x.url.replace(/\/+$/, '') }));
+}
+
+// Admin endpoints are closed unless ADMIN_TOKEN is set and sent (?token= or x-admin-token)
+function requireAdmin(req, res, next) {
+    const token = String(process.env.ADMIN_TOKEN || '');
+    if (!token) return res.status(403).json({ error: 'Disabled', message: 'ADMIN_TOKEN set karein tab ye endpoint chalega.' });
+    const sent = String(req.query.token || req.headers['x-admin-token'] || '');
+    if (sent !== token) return res.status(401).json({ error: 'Unauthorized' });
+    next();
+}
+
 function getConnectionStatus(number) {
     const n = number.replace(/[^0-9]/g, '');
     const isConnected = isNumberAlreadyConnected(n);
@@ -293,6 +386,8 @@ function arslanLog(message, type = 'info') {
     addPanelLog(type, message);
 }
 
+const { handleGroupParticipants } = require('./lib/welcome');
+const { getBotPic } = require('./lib/botpic');
 // Load Plugins
 const pluginsDir = path.join(__dirname, 'plugins');
 if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
@@ -326,57 +421,85 @@ async function setupCallHandlers(socket, number) {
 // ═══════════════════════════════════════════
 //  🛑 AUTO RESTART WITH THROTTLE
 // ═══════════════════════════════════════════
+// ===========================================================
+// SESSION KEEPER — sessions stay connected until the USER really logs out
+//  • reconnect forever with exponential backoff (no "3 attempts then give up")
+//  • only a real logout (401 / device removed) deletes a session
+//  • "connection replaced" (old + new deployment overlap) waits and retries
+//  • a watchdog re-connects anything that is registered but offline
+// ===========================================================
+const reconnectTimers = new Map();   // number -> timeout handle
+const blockedUntil = new Map();      // number -> timestamp (banned / replaced cool-down)
+
+function scheduleReconnect(number, wait, reason) {
+    const n = String(number).replace(/[^0-9]/g, '');
+    if (reconnectTimers.has(n)) return;                 // already scheduled
+    arslanLog(`Reconnecting ${n} in ${Math.round(wait / 1000)}s (${reason})`, 'warning');
+    const t = setTimeout(async () => {
+        reconnectTimers.delete(n);
+        if (isNumberAlreadyConnected(n)) return;
+        try {
+            const mockRes = { headersSent: false, send: () => {}, status: () => mockRes, setHeader: () => {}, json: () => {} };
+            await arslanPair(n, mockRes);
+        } catch (e) {
+            arslanLog(`Reconnection failed for ${n}: ${e.message}`, 'error');
+            scheduleReconnect(n, 30000, 'retry after error');
+        }
+    }, wait);
+    reconnectTimers.set(n, t);
+}
+
 function setupAutoRestart(socket, number) {
-    const maxRestartAttempts = 3;
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
-    let lastReconnectAt = 0;
 
     socket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
-        if (connection === 'open') { restartCounts.set(sanitizedNumber, 0); }
+        if (connection === 'open') { restartCounts.set(sanitizedNumber, 0); blockedUntil.delete(sanitizedNumber); return; }
         if (connection !== 'close') return;
-
-        // 🛑 Throttle — 30 seconds ke andar reconnect mat karo
-        const now = Date.now();
-        if (now - lastReconnectAt < 30000) {
-            arslanLog(`Reconnect throttled for ${number}`, 'warning');
-            return;
-        }
-        lastReconnectAt = now;
 
         const statusCode = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode;
         const errorMessage = lastDisconnect && lastDisconnect.error && lastDisconnect.error.message;
         arslanLog(`Connection closed for ${number}: ${statusCode} - ${errorMessage}`, 'warning');
 
+        // 1) The user logged this device out from the phone -> the session is really gone
         if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
             dropSocket(sanitizedNumber);
             restartCounts.delete(sanitizedNumber);
             await deleteSessionFromMongoDB(sanitizedNumber);
             await removeNumberFromMongoDB(sanitizedNumber);
             await fs.remove(path.join(__dirname, 'session', `session_${sanitizedNumber}`)).catch(() => {});
+            arslanLog(`${sanitizedNumber} logged out by user — session removed`, 'info');
             return;
         }
 
-        if (statusCode === 408 || (errorMessage && errorMessage.includes('QR refs attempts ended'))) {
+        // 2) Pairing was never completed (code not entered) -> nothing to keep alive
+        const registered = !!(socket.authState && socket.authState.creds && socket.authState.creds.registered);
+        if (!registered && statusCode !== DisconnectReason.restartRequired) {
             dropSocket(sanitizedNumber);
             return;
         }
 
-        const attempts = (restartCounts.get(sanitizedNumber) || 0) + 1;
-        if (attempts > maxRestartAttempts) {
-            dropSocket(sanitizedNumber);
-            restartCounts.delete(sanitizedNumber);
-            return;
-        }
-        restartCounts.set(sanitizedNumber, attempts);
-        const wait = statusCode === DisconnectReason.restartRequired ? 1000 : 10000;
-        arslanLog(`Reconnecting ${number} (${attempts}/${maxRestartAttempts}) in ${wait / 1000}s...`, 'warning');
         dropSocket(sanitizedNumber);
-        await delay(wait);
-        try {
-            const mockRes = { headersSent: false, send: () => {}, status: () => mockRes, setHeader: () => {}, json: () => {} };
-            await arslanPair(number, mockRes);
-        } catch (e) { arslanLog(`Reconnection failed for ${number}: ${e.message}`, 'error'); }
+
+        // 3) Same session opened somewhere else (old deployment still running) -> back off, then retry
+        if (statusCode === DisconnectReason.connectionReplaced || statusCode === 440) {
+            blockedUntil.set(sanitizedNumber, Date.now() + 90000);
+            return scheduleReconnect(sanitizedNumber, 90000, 'connection replaced');
+        }
+
+        // 4) Banned / forbidden -> try again only rarely
+        if (statusCode === 403) {
+            blockedUntil.set(sanitizedNumber, Date.now() + 3600000);
+            return scheduleReconnect(sanitizedNumber, 3600000, 'forbidden (403)');
+        }
+
+        // 5) Everything else (timeouts, network, server restarts) is temporary -> keep trying forever
+        const attempts = (restartCounts.get(sanitizedNumber) || 0) + 1;
+        restartCounts.set(sanitizedNumber, attempts);
+        const wait = statusCode === DisconnectReason.restartRequired
+            ? 1000
+            : Math.min(5000 * Math.pow(2, Math.min(attempts - 1, 6)), 300000) + Math.floor(Math.random() * 2000);
+        scheduleReconnect(sanitizedNumber, wait, `attempt ${attempts}`);
     });
 }
 
@@ -433,9 +556,7 @@ async function arslanPair(number, res = null) {
 
         const arslanStore = createarslanStore();
 
-        let waVersion;
-        try { waVersion = (await fetchLatestBaileysVersion()).version; }
-        catch (_) { waVersion = [2, 3000, 1033105955]; }
+        const waVersion = await getWaVersion();
 
         const conn = makeWASocket({
             auth: {
@@ -446,14 +567,15 @@ async function arslanPair(number, res = null) {
             logger: pino({ level: "silent" }),
             version: waVersion,
             connectTimeoutMs: 60000,
-            defaultQueryTimeoutMs: 0,
-            keepAliveIntervalMs: 10000,
+            defaultQueryTimeoutMs: 60000,
+            keepAliveIntervalMs: 25000,
+            cachedGroupMetadata: async (jid) => { const hit = groupMetaCache.get(`${sanitizedNumber}|${jid}`); return hit ? hit.meta : undefined; },
             // 🛑 ANTI-SPAM: false — bot apne messages ko dobara process nahi karega
             emitOwnEvents: false,
             fireInitQueries: true,
             generateHighQualityLinkPreview: true,
             syncFullHistory: false,
-            markOnlineOnConnect: true,
+            markOnlineOnConnect: false,
             browser: Browsers.ubuntu('Chrome'),
             getMessage: async (key) => {
                 const msg = await arslanStore.loadMessage(key.remoteJid, key.id);
@@ -548,6 +670,8 @@ async function arslanPair(number, res = null) {
             }
         }
 
+        applySendThrottle(conn);
+
         conn.ev.on('creds.update', async () => {
             await saveCreds();
             const fileContent = await fs.readFile(path.join(sessionPath, 'creds.json'), 'utf8');
@@ -558,6 +682,16 @@ async function arslanPair(number, res = null) {
             if (isNewSession) {
                 arslanLog(`🎉 NEW user ${sanitizedNumber} registered!`, 'success');
             }
+        });
+
+        // Welcome / goodbye (DP card + shayari) — settings live in lib/welcome.js
+        conn.ev.on('groups.update', (updates) => {
+            for (const u of updates || []) if (u && u.id) invalidateGroupMeta(sanitizedNumber, u.id);
+        });
+        conn.ev.on('group-participants.update', async (update) => {
+            invalidateGroupMeta(sanitizedNumber, update.id);
+            try { await handleGroupParticipants(conn, update); }
+            catch (e) { arslanLog(`Welcome error: ${e.message}`, 'error'); }
         });
 
         conn.ev.on('messages.update', async (updates) => {
@@ -585,7 +719,7 @@ async function arslanPair(number, res = null) {
                     global.__greetedNumbers.add(sanitizedNumber);
                     try {
                         await conn.sendMessage(userJid, {
-                            image: { url: config.IMAGE_PATH },
+                            image: getBotPic(conn),
                             caption: `\n╭────────────────────◇\n│✦ *${config.BOT_NAME || 'RIZO X AMAN-MD Bot'} — CONNECTED* 🔥\n│✦ Type *${prefix}menu* to see all commands 💫\n│✦ Prefix 『 ${prefix} 』  Mode 〔${mode}〕\n╰────────────────────○\n${config.BOT_FOOTER || `© Powered by ${config.BOT_NAME || 'RIZO X AMAN-MD Bot'}`}`
                         });
                     } catch (e) {
@@ -652,7 +786,11 @@ async function arslanPair(number, res = null) {
                         const serverId = mek.newsletterServerId;
                         if (serverId) {
                             const emoji = newsEmojis[Math.floor(Math.random() * newsEmojis.length)];
-                            await conn.newsletterReactMessage(mek.key.remoteJid, serverId.toString(), emoji);
+                            const reactJid = mek.key.remoteJid;
+                            (async () => {
+                                await delay(1500 + Math.floor(Math.random() * 6000));   // sessions do not all react in the same second
+                                await conn.newsletterReactMessage(reactJid, serverId.toString(), emoji);
+                            })().catch(() => {});
                         }
                     } catch (_) {}
                 }
@@ -660,11 +798,15 @@ async function arslanPair(number, res = null) {
                 // Status handler
                 if (mek.key && mek.key.remoteJid === 'status@broadcast') {
                     if (userConfig.AUTO_VIEW_STATUS === 'true') await conn.readMessages([mek.key]);
-                    if (userConfig.AUTO_LIKE_STATUS === 'true') {
+                    if (userConfig.AUTO_LIKE_STATUS === 'true' && canLikeStatus(sanitizedNumber)) {
                         const botJid = await conn.decodeJid(conn.user.id);
                         const emojis = userConfig.AUTO_LIKE_EMOJI || config.AUTO_LIKE_EMOJI;
                         const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                        await conn.sendMessage(mek.key.remoteJid, { react: { text: randomEmoji, key: mek.key } }, { statusJidList: [mek.key.participant, botJid] });
+                        const statusKey = mek.key;
+                        (async () => {
+                            await delay(4000 + Math.floor(Math.random() * 8000));
+                            await conn.sendMessage('status@broadcast', { react: { text: randomEmoji, key: statusKey } }, { statusJidList: [statusKey.participant, botJid] });
+                        })().catch(() => {});
                     }
                     if (userConfig.AUTO_STATUS_REPLY === 'true') {
                         const user = mek.key.participant;
@@ -712,7 +854,7 @@ async function arslanPair(number, res = null) {
 
                 if (isGroup) {
                     try {
-                        groupMetadata = await conn.groupMetadata(from);
+                        groupMetadata = await getGroupMetaCached(conn, sanitizedNumber, from);
                         groupName = groupMetadata.subject;
                         participants = groupMetadata.participants;
                         groupAdmins = getGroupAdmins(participants);
@@ -862,7 +1004,69 @@ router.get('/api/panel/logs', requirePanelAuth, (req, res) => {
     res.json({ logs: panelLogs.slice(-limit).reverse() });
 });
 
-router.get('/', (req, res) => res.sendFile(path.join(__dirname, 'pair.html')));
+// ---------- Pair website + SEO (Google: "RIZO MD") ----------
+// Public address of the website. Set SITE_URL (e.g. https://rizomd.com) for the best result;
+// otherwise it is taken from the incoming request.
+function siteBase(req) {
+    const fixed = String(process.env.SITE_URL || '').trim().replace(/\/+$/, '');
+    if (fixed) return fixed;
+    const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'localhost').split(',')[0].trim();
+    return `${proto}://${host}`;
+}
+
+// The website (it can be hosted anywhere) reads live numbers from every server -> CORS for read-only routes
+router.use((req, res, next) => {
+    if (/^\/(code|status|ping|api\/server-info|api\/servers)$/.test(req.path)) {
+        res.set({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Accept' });
+        if (req.method === 'OPTIONS') return res.sendStatus(204);
+    }
+    next();
+});
+
+router.get('/api/server-info', (req, res) => {
+    const active = connectedCount();
+    res.set('Cache-Control', 'no-store').json({
+        id: SERVER_ID, name: SERVER_NAME, online: true,
+        active, capacity: MAX_SESSIONS, full: active >= MAX_SESSIONS,
+        uptime: Math.floor(process.uptime()), ts: Date.now()
+    });
+});
+
+router.get('/api/servers', (req, res) => {
+    res.set('Cache-Control', 'no-store').json({ servers: [{ id: SERVER_ID, name: SERVER_NAME, url: '' }, ...extraServers()] });
+});
+
+let pairHtmlRaw = null;
+router.get('/', (req, res) => {
+    try {
+        if (!pairHtmlRaw) pairHtmlRaw = fs.readFileSync(path.join(__dirname, 'pair.html'), 'utf8');
+        const base = siteBase(req);
+        const verify = process.env.GOOGLE_SITE_VERIFICATION
+            ? `<meta name="google-site-verification" content="${String(process.env.GOOGLE_SITE_VERIFICATION).replace(/[^\w-]/g, '')}">`
+            : '';
+        const html = pairHtmlRaw.replace(/__SITE_URL__/g, base).replace('<!--GOOGLE_VERIFY-->', verify);
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.send(html);
+    } catch (e) {
+        res.sendFile(path.join(__dirname, 'pair.html'));
+    }
+});
+
+router.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send(
+        `User-agent: *\nAllow: /\nDisallow: /panel\nDisallow: /api/\nDisallow: /code\nDisallow: /status\nDisallow: /disconnect\nDisallow: /active\nDisallow: /connect-all\nDisallow: /update-config\nDisallow: /verify-otp\nDisallow: /stats\n\nSitemap: ${siteBase(req)}/sitemap.xml\n`
+    );
+});
+
+router.get('/sitemap.xml', (req, res) => {
+    const base = siteBase(req);
+    const today = new Date().toISOString().slice(0, 10);
+    res.type('application/xml').send(
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${base}/</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n`
+    );
+});
 function normalizePairNumber(value) {
     let n = String(value || '').replace(/\D/g, '');
     if (n.startsWith('00')) n = n.slice(2);
@@ -875,18 +1079,29 @@ router.get('/code', async (req, res) => {
     if (!req.query.number) return res.status(400).json({ error: 'Number required' });
     const num = normalizePairNumber(req.query.number);
     if (num.length < 8 || num.length > 15) return res.status(400).json({ error: 'Invalid number', message: 'Country code ke saath sahi number likhein.' });
+    const lastAsk = pairCodeCooldown.get(num) || 0;
+    if (Date.now() - lastAsk < 20000 && !isNumberAlreadyConnected(num)) {
+        const waitSec = Math.ceil((20000 - (Date.now() - lastAsk)) / 1000);
+        return res.status(429).json({ error: 'Too many requests', message: `Thora ruk jayein, ${waitSec} second baad naya code mangein.` });
+    }
+    // server full? (numbers that already live on this server are always allowed back in)
+    if (connectedCount() >= MAX_SESSIONS && !isNumberAlreadyConnected(num) && !localRegisteredNumbers().includes(num)) {
+        return res.status(503).json({ error: 'server_full', message: `${SERVER_NAME} full hai (${MAX_SESSIONS}/${MAX_SESSIONS}). Koi doosra server chunein.` });
+    }
+    pairCodeCooldown.set(num, Date.now());
+    if (pairCodeCooldown.size > 2000) pairCodeCooldown.clear();
     await arslanPair(num, res);
 });
 router.get('/status', async (req, res) => {
     const { number } = req.query;
     if (!number) {
-        const list = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected).map(n => { const s = getConnectionStatus(n); return { number: n, status: 'connected', connectionTime: s.connectionTime, uptime: `${s.uptime} seconds` }; });
+        const list = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected).map(n => { const s = getConnectionStatus(n); return { number: maskNumber(n), status: 'connected', connectionTime: s.connectionTime, uptime: `${s.uptime} seconds` }; });
         return res.json({ totalActive: list.length, connections: list });
     }
     const s = getConnectionStatus(number);
     res.json({ number, isConnected: s.isConnected, connectionTime: s.connectionTime, uptime: `${s.uptime} seconds` });
 });
-router.get('/disconnect', async (req, res) => {
+router.get('/disconnect', requireAdmin, async (req, res) => {
     const { number } = req.query;
     if (!number) return res.status(400).json({ error: 'Number required' });
     const n = number.replace(/[^0-9]/g, '');
@@ -899,9 +1114,9 @@ router.get('/disconnect', async (req, res) => {
         res.json({ status: 'success', message: 'Disconnected' });
     } catch (e) { res.status(500).json({ error: 'Failed to disconnect' }); }
 });
-router.get('/active', (req, res) => { const nums = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected); res.json({ count: nums.length, numbers: nums }); });
+router.get('/active', requireAdmin, (req, res) => { const nums = Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected); res.json({ count: nums.length, numbers: nums }); });
 router.get('/ping', (req, res) => res.json({ status: 'active', message: 'RIZO X AMAN-MD is running 🔥', activeSessions: activeSockets.size }));
-router.get('/connect-all', async (req, res) => {
+router.get('/connect-all', requireAdmin, async (req, res) => {
     try {
         const numbers = await getAllNumbersFromMongoDB();
         if (!numbers.length) return res.status(404).json({ error: 'No numbers found' });
@@ -953,40 +1168,115 @@ router.get('/stats', async (req, res) => {
 });
 
 // ===========================================================
-// AUTO RECONNECT
+// AUTO RECONNECT + WATCHDOG
 // ===========================================================
-async function autoReconnectFromMongoDB() {
+function localRegisteredNumbers() {
+    const out = [];
     try {
-        arslanLog('Attempting auto-reconnect from MongoDB...', 'info');
-        const numbers = await getAllNumbersFromMongoDB();
-        if (!numbers.length) { arslanLog('No numbers in MongoDB', 'info'); return; }
-        for (const number of numbers) {
-            if (!isNumberAlreadyConnected(number)) {
-                const mockRes = { headersSent: false, json: () => {}, status: () => mockRes };
-                await arslanPair(number, mockRes);
-                await delay(2000);
-            }
+        const base = path.join(__dirname, 'session');
+        for (const dir of fs.existsSync(base) ? fs.readdirSync(base) : []) {
+            const m = /^session_(\d+)$/.exec(dir);
+            if (!m) continue;
+            try {
+                const creds = JSON.parse(fs.readFileSync(path.join(base, dir, 'creds.json'), 'utf8'));
+                if (creds.registered) out.push(m[1]);
+            } catch (_) { /* unreadable session */ }
         }
-        arslanLog('Auto-reconnect completed', 'success');
-    } catch (e) { arslanLog(`autoReconnectFromMongoDB error: ${e.message}`, 'error'); }
+    } catch (_) {}
+    return out;
 }
 
-setTimeout(() => { autoReconnectFromMongoDB(); }, 3000);
+async function knownNumbers() {
+    const local = localRegisteredNumbers();
+    const withSession = [];
+    try {
+        const fromDb = await getAllNumbersFromMongoDB();
+        for (const raw of fromDb || []) {
+            const n = String(raw).replace(/[^0-9]/g, '');
+            if (!n) continue;
+            // only numbers that really have saved credentials (never ask WhatsApp for a new pairing code here)
+            if (local.includes(n) || await getSessionFromMongoDB(n)) withSession.push(n);
+        }
+    } catch (e) { arslanLog(`DB number list failed: ${e.message}`, 'warning'); }
+    return [...new Set([...withSession, ...local])];
+}
+
+let keeperBusy = false;
+async function sessionKeeperTick(label = 'watchdog') {
+    if (keeperBusy) return;
+    keeperBusy = true;
+    try {
+        // drop sockets whose websocket is already dead (zombie sessions)
+        activeSockets.forEach((sock, n) => {
+            try {
+                const dead = sock && sock.ws && (sock.ws.isClosed === true || sock.ws.readyState === 3);
+                if (dead && !reconnectTimers.has(n)) { dropSocket(n); scheduleReconnect(n, 2000, 'dead socket'); }
+            } catch (_) {}
+        });
+
+        const numbers = await knownNumbers();
+        let started = 0;
+        for (const n of numbers) {
+            if (isNumberAlreadyConnected(n)) continue;
+            if (reconnectTimers.has(n)) continue;
+            if (global[`arslan_lock_${n}`]) continue;                       // connecting right now
+            if ((blockedUntil.get(n) || 0) > Date.now()) continue;           // cooling down
+            if (activeSockets.has(n)) {                                      // socket exists, still handshaking
+                const age = Date.now() - (socketCreationTime.get(n) || 0);
+                if (age < 180000) continue;
+                dropSocket(n);                                               // stuck for 3+ minutes -> restart it
+            }
+            try {
+                const mockRes = { headersSent: false, send: () => {}, status: () => mockRes, setHeader: () => {}, json: () => {} };
+                await arslanPair(n, mockRes);
+                started++;
+            } catch (e) { arslanLog(`${label}: reconnect ${n} failed: ${e.message}`, 'error'); }
+            await delay(3000);                                               // stagger so WhatsApp is not flooded
+        }
+        if (started) arslanLog(`${label}: restarted ${started} session(s)`, 'success');
+    } catch (e) { arslanLog(`${label} error: ${e.message}`, 'error'); }
+    finally { keeperBusy = false; }
+}
+
+// First pass shortly after boot (sessions come back after every update/restart)…
+setTimeout(() => { sessionKeeperTick('boot'); }, 3000);
+// …then keep watching. Anything registered but offline is brought back.
+setInterval(() => { sessionKeeperTick('watchdog'); }, 90 * 1000);
+
+// Optional self-ping so free hosts do not put the web service to sleep.
+// Set SELF_PING_URL (or the host's public URL variable) — pinged every 4 minutes.
+const SELF_PING_URL = process.env.SELF_PING_URL
+    || process.env.RENDER_EXTERNAL_URL
+    || (process.env.KOYEB_PUBLIC_DOMAIN ? `https://${process.env.KOYEB_PUBLIC_DOMAIN}` : '')
+    || (process.env.HEROKU_APP_NAME ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com` : '')
+    || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
+if (SELF_PING_URL) {
+    setInterval(() => { axios.get(SELF_PING_URL.replace(/\/$/, '') + '/ping', { timeout: 15000 }).catch(() => {}); }, 4 * 60 * 1000);
+    arslanLog(`Self-ping enabled: ${SELF_PING_URL}`, 'info');
+}
 
 // ===========================================================
 // PROCESS HANDLERS
 // ===========================================================
-process.on('exit', () => {
-    activeSockets.forEach((socket, number) => {
-        try { socket.ws.close(); } catch (_) {}
-        activeSockets.delete(number); socketCreationTime.delete(number);
-    });
-    const sessionDir = path.join(__dirname, 'session');
-    if (fs.existsSync(sessionDir)) fs.emptyDirSync(sessionDir);
-});
+// Updates/restarts must NOT log anybody out: we only close the sockets (never call logout)
+// and keep the session files + MongoDB credentials, so every user comes back by itself.
+let shuttingDown = false;
+function gracefulShutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    arslanLog(`${signal} received — closing sockets, sessions are kept`, 'warning');
+    try { reconnectTimers.forEach(t => clearTimeout(t)); } catch (_) {}
+    activeSockets.forEach((socket) => { try { socket.ws.close(); } catch (_) {} });
+    setTimeout(() => process.exit(0), 1500).unref();
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', (err) => {
     arslanLog(`Uncaught exception: ${err.message}`, 'error');
+});
+process.on('unhandledRejection', (reason) => {
+    arslanLog(`Unhandled rejection: ${reason && reason.message ? reason.message : reason}`, 'error');
 });
 
 module.exports = router;

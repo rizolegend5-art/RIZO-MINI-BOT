@@ -30,14 +30,11 @@ cmd({
 
     try {
         await ctx.reply('⏳ Bot ki profile pic update kar raha hun…');
-        const filePath = await conn.downloadAndSaveMediaMessage(
-            { msg: imgMsg, mtype: 'imageMessage' },
-            `./tmp/botpp_${Date.now()}`
-        );
-
-        await conn.updateProfilePicture(conn.user.id, { url: filePath });
-        await fs.remove(filePath).catch(() => {});
-
+        const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+        const stream = await downloadContentFromMessage(imgMsg, 'image');
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+        await conn.updateProfilePicture(conn.user.id, buffer);
         return ctx.reply('✅ *Bot ki display pic update ho gayi!* 🔥');
     } catch (e) {
         console.error('setpp error:', e.message);
