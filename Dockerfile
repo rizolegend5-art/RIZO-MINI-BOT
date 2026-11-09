@@ -13,9 +13,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY package.json ./
+COPY . .
 RUN npm install --omit=dev --no-audit --no-fund --legacy-peer-deps || npm install --omit=dev --no-audit --no-fund --legacy-peer-deps
 
-COPY . .
 EXPOSE 8000
 CMD ["node", "index.js"]

@@ -11,7 +11,7 @@
     "check:music": "node --check plugins/song.js",
     "check:all": "find . -path ./node_modules -prune -o -name \"*.js\" -type f -print0 | xargs -0 -n1 node --check",
     "check:voice": "node --check plugins/jarvis-voice.js",
-    "postinstall": "node -e \"require('./lib/media-dl').ensureYtDlp().then(()=>console.log('yt-dlp ready')).catch(e=>console.log('yt-dlp will be fetched on first use:',e.message))\""
+    "postinstall": "node -e \"try{require('./lib/media-dl').ensureYtDlp().then(()=>console.log('yt-dlp ready')).catch(e=>console.log('yt-dlp will be fetched on first use:',e.message))}catch(e){console.log('postinstall skipped:',e.message)}\""
   },
   "dependencies": {
     "@whiskeysockets/baileys": "7.0.0-rc14",
