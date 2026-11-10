@@ -617,7 +617,8 @@ async function arslanPair(number, res = null) {
             browser: Browsers.ubuntu('Chrome'),
             getMessage: async (key) => {
                 const msg = await arslanStore.loadMessage(key.remoteJid, key.id);
-                return msg && msg.message ? msg.message : { conversation: 'RIZO X AMAN-MD' };
+                // unknown message -> undefined (a fake placeholder text here was re-sent to chats on every retry = spam)
+                return msg && msg.message ? msg.message : undefined;
             }
         });
 
