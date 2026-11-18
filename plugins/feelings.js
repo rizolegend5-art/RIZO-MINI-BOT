@@ -62,6 +62,67 @@ async function fetchGif(category) {
     return null;
 }
 
+
+// ═══════════════════════════════════════════
+//  ANIME EMOJI (kaomoji) — same type as the emotion
+// ═══════════════════════════════════════════
+const KAO = {
+    happy:    ['٩(◕‿◕｡)۶', '(＾▽＾)', '☆*:.｡.o(≧▽≦)o.｡.:*☆'],
+    smile:    ['(◕‿◕✿)', '(｡◕‿◕｡)', '(＾‿＾)'],
+    laugh:    ['(≧▽≦)', 'ヾ(＾∇＾)', '(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧'],
+    dance:    ['♪┏(・o･)┛♪', '♪ヽ(⌒o⌒)ﾉ♪', '┏(＾0＾)┛┗(＾0＾) ┓'],
+    wink:     ['(^_~)', '(｡•̀ᴗ-)✧', '(≧◡≦) ♡'],
+    wave:     ['(｡･ω･)ﾉﾞ', 'ヾ(＾∇＾)', '(＾▽＾)/'],
+    sad:      ['(︶︹︺)', '(´；ω；`)', '( ˃̣̣̥⌓˂̣̣̥ )'],
+    cry:      ['(╥﹏╥)', '(T_T)', '(ノД`)・゜・。'],
+    pout:     ['(｀ε´)', '( ｰ̀εｰ́ )', '(´-ω-`)'],
+    facepalm: ['(－‸ლ)', '(︶｡︶)', '(ー_ー)!!'],
+    bored:    ['(¬_¬)', '(-_-)zzz', '(￣～￣;)'],
+    nope:     ['(＞﹏＜)', '(ー_ー)!!', '┐(´д`)┌'],
+    hug:      ['(づ｡◕‿‿◕｡)づ', '(⊃｡•́‿•̀｡)⊃', '(つ≧▽≦)つ'],
+    kiss:     ['(っ˘з(˘⌣˘ ) ♡', '( ˘ ³˘)♥', '(´,,•ω•,,)♡'],
+    cuddle:   ['(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)', '(つ✧ω✧)つ', '(っ´▽`)っ♡'],
+    pat:      ['(｡･ω･)ﾉﾞ', '(´• ω •`)ﾉ', '(*´▽`*)ノ'],
+    handhold: ['(っ´▽`)っ♡', '(｡♥‿♥｡)', '(◕‿◕)♡'],
+    blush:    ['(⁄ ⁄•⁄ω⁄•⁄ ⁄)', '(*/ω＼*)', '(〃ω〃)'],
+    love:     ['(♡´▽`♡)', '(｡♥‿♥｡)', '(´,,•ω•,,)♡'],
+    slap:     ['(╯°□°)╯︵ ✋', 'ヽ(`Д´)ﾉ', '(ノಠ益ಠ)ノ'],
+    punch:    ['(ง •̀_•́)ง', '(҂`з´)👊', '(ﾉ｀Д´)ﾉ'],
+    kick:     ['(ノಠ益ಠ)ノ', '(ﾒ｀ﾛ´)︻┳═一', '(｀Д´)ノ'],
+    bite:     ['(๑•́ ₃ •̀๑)', 'ଘ(੭*ˊᵕˋ)੭', '(◕ᴥ◕ʋ)'],
+    poke:     ['(｡•̀‿•́｡)☞', '☞(ﾟヮﾟ☞)', '(≧◡≦)☞'],
+    angry:    ['(╬ Ò﹏Ó)', '(ಠ益ಠ)', '(҂◡_◡)'],
+    nom:      ['(っ˘ڡ˘ς)', '(๑´ڡ`๑)', 'ヽ(´▽`)/ 🍙'],
+    sleep:    ['(-_-)zzz', '(˘ω˘) zzz', '(∪｡∪)｡｡｡zzZ'],
+    yawn:     ['(´〜｀*) zzz', '(￣o￣) . z Z', '(≧ω≦)ﾉ zZ'],
+    stare:    ['(◉_◉)', '(•ˋ _ ˊ•)', '(° ロ °)!'],
+    smug:     ['( ͡° ͜ʖ ͡°)', '(¬‿¬)', '(￣ー￣)ﾆﾔﾘ'],
+    think:    ['(￣ー￣；)?', '(・_・ヾ', '( ˘･з･)'],
+    tickle:   ['(≧∀≦)ﾉ', '(*≧▽≦)ノ', '(ﾉ´ з `)ノ'],
+    shrug:    ['¯\\_(ツ)_/¯', '┐(´ー｀)┌', '(・・ ) ?'],
+    thumbsup: ['(b ᵔ▽ᵔ)b', '(๑•̀ㅂ•́)و✧', 'd(*⌒▽⌒*)b'],
+    highfive: ['(ﾉ◕ヮ◕)ﾉ ﾟ✧ヽ(◕ヮ◕ヽ)', '＼(＾▽＾)／', '(^o^)ﾉ ヾ(^o^)'],
+    yeet:     ['ヽ(`⌒´メ)ノ ===3', '(ノ°▽°)ノ︵ ┻━┻', '(ﾉ≧∀≦)ﾉ ‥…━━━★'],
+    nod:      ['(￣ー￣)ゞ', '(｡•̀ᴗ-)✧', '( ´ ▽ ` )b'],
+    lurk:     ['(⊙_⊙)', '(｡◝‿◜｡)', '(._.)'],
+    cringe:   ['(°◇°;)', '( ꒪Д꒪)ノ', '(*_*;'],
+    bonk:     ['(╯°□°)╯🔨', '(ノ°Д°)ノ🔨', '(｀Д´)ﾉ🔨'],
+    shoot:    ['(¬､¬)︻┳═一', '(╯°□°)╯︵ ┻━┻', '(≖_≖ )🔫']
+};
+const kaoFor = (name, category) => {
+    const arr = KAO[name] || KAO[category] || ['(｡◕‿◕｡)'];
+    const a = [...arr].sort(() => Math.random() - 0.5);
+    return a.slice(0, 2).join('   ');
+};
+// who -> whom line (works with @mention or reply)
+const actionLine = (m, ctx) => {
+    const info = m.msg && m.msg.contextInfo;
+    const target = (info && info.mentionedJid && info.mentionedJid[0]) || (m.quoted && m.quoted.sender) || '';
+    const n = (j) => String(j || '').split('@')[0].split(':')[0];
+    if (!target || !ctx.sender) return { line: '', mentions: [] };
+    return { line: `\n👤 @${n(ctx.sender)}  ➜  @${n(target)}`, mentions: [ctx.sender, target] };
+};
+
 // ═══════════════════════════════════════════
 //  COMMAND REGISTER HELPER
 // ═══════════════════════════════════════════
@@ -81,14 +142,16 @@ function emotion(pattern, aliases, category, emoji, caption) {
                 return ctx.reply(`❌ *${caption}* GIF unavailable. Dobara try karo.`);
             }
 
-            let cap = `${emoji} ${caption}`;
-            if (r.anime) cap += `\n📺 ${String(r.anime).slice(0, 80)}`;
+            const act = actionLine(m, ctx);
+            let cap = `${emoji} ${caption}\n\n${kaoFor(pattern, category)}${act.line}`;
+            if (r.anime) cap += `\n\n📺 ${String(r.anime).slice(0, 80)}`;
             if (r.artist) cap += `\n🎨 ${String(r.artist).slice(0, 60)}`;
 
             return conn.sendMessage(ctx.from, {
                 video: { url: r.url },
                 gifPlayback: true,
-                caption: cap
+                caption: cap,
+                mentions: act.mentions
             }, { quoted: mek });
 
         } catch (e) {
@@ -134,7 +197,7 @@ emotion('love',      ['iloveyou', 'pyar'],              'cuddle',    '❤️', '
 // ═══════════════════════════════════════════
 emotion('slap',      ['thappar', 'slapping'],           'slap',      '👋', '*SLAP!*');
 emotion('punch',     ['mukka', 'punching'],             'punch',     '👊', '*PUNCH!*');
-emotion('kick',      ['laat', 'kicking'],               'kick',      '🦵', '*KICK!*');
+emotion('kickgif',   ['laat', 'kicking'],               'kick',      '🦵', '*KICK!*');
 emotion('bite',      ['kaat', 'biting'],                'bite',      '🦷', '*BITE!*');
 emotion('poke',      ['chubh', 'poking'],               'poke',      '👉', '*POKE*');
 emotion('angry',     ['gussa', 'furious'],              'pout',      '😡', '*ANGRY!*');
@@ -191,7 +254,7 @@ cmd({
 .hug .kiss .cuddle .pat .handhold .blush .love
 
 😡 *ANGRY (6):*
-.slap .punch .kick .bite .poke .angry
+.slap .punch .kickgif .bite .poke .angry
 
 🤪 *FUN (8):*
 .nom .sleep .yawn .stare .smug .think .tickle .shrug
@@ -205,7 +268,7 @@ cmd({
 💛 *SUPPORT:*
 .mood <happy|sad|angry|tired|lonely|grateful> .comfort .affirmation
 
-💡 Har command apna exact emotion GIF bhejta hai
+💡 Har command apna exact emotion GIF + usi type ka anime emoji bhejta hai\n💡 Kisi ko @mention ya reply karo to wo bhi caption mein aata hai
 🎬 Powered by Nekos.best + waifu.pics`
     );
 });
@@ -235,7 +298,7 @@ cmd({
         hug: 'hug', kiss: 'kiss', cuddle: 'cuddle', pat: 'pat',
         handhold: 'handhold', blush: 'blush', love: 'cuddle',
         // angry
-        slap: 'slap', punch: 'punch', kick: 'kick', bite: 'bite',
+        slap: 'slap', punch: 'punch', kick: 'kick', kickgif: 'kick', bite: 'bite',
         poke: 'poke', angry: 'pout',
         // fun
         nom: 'nom', sleep: 'sleep', yawn: 'yawn', stare: 'stare',
@@ -263,14 +326,16 @@ cmd({
         const r = await fetchGif(map[name]);
         if (!r?.url) return ctx.reply('❌ GIF unavailable.');
 
-        let cap = `💫 *${name.toUpperCase()}*`;
-        if (r.anime) cap += `\n📺 ${String(r.anime).slice(0, 80)}`;
+        const act = actionLine(m, ctx);
+        let cap = `💫 *${name.toUpperCase()}*\n\n${kaoFor(name, map[name])}${act.line}`;
+        if (r.anime) cap += `\n\n📺 ${String(r.anime).slice(0, 80)}`;
         if (r.artist) cap += `\n🎨 ${String(r.artist).slice(0, 60)}`;
 
         return conn.sendMessage(ctx.from, {
             video: { url: r.url },
             gifPlayback: true,
-            caption: cap
+            caption: cap,
+            mentions: act.mentions
         }, { quoted: mek });
 
     } catch (e) {

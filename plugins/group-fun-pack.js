@@ -405,7 +405,7 @@ cmd({
 // 20. SHIP — Ship two users
 cmd({
     pattern: 'ship',
-    alias: ['love'],
+    alias: [],
     desc: 'Do users ko ship karo',
     category: 'fun',
     react: '💘',
@@ -492,8 +492,8 @@ cmd({
 
 // 24. SLAP — Slap someone
 cmd({
-    pattern: 'slap',
-    alias: ['thappar'],
+    pattern: 'slapfun',
+    alias: ['slapjoke'],
     desc: 'Kisi ko slap karo (fun)',
     category: 'fun',
     react: '👋',
@@ -510,7 +510,7 @@ cmd({
 
 // 25. HUG — Hug someone
 cmd({
-    pattern: 'hug',
+    pattern: 'hugfun',
     alias: ['galey'],
     desc: 'Kisi ko hug karo',
     category: 'fun',
@@ -528,7 +528,7 @@ cmd({
 
 // 26. KISS — Kiss someone (fun)
 cmd({
-    pattern: 'kiss',
+    pattern: 'kissfun',
     alias: ['pappi'],
     desc: 'Kisi ko kiss karo (fun)',
     category: 'fun',
@@ -546,8 +546,8 @@ cmd({
 
 // 27. PUNCH — Punch someone
 cmd({
-    pattern: 'punch',
-    alias: ['mukka'],
+    pattern: 'punchfun',
+    alias: ['ghoosa'],
     desc: 'Kisi ko punch (fun)',
     category: 'fun',
     react: '👊',

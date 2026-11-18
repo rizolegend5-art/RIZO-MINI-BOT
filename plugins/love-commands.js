@@ -9,7 +9,7 @@ function getMentioned(mek) {
 function tag(jid) { return `@${String(jid || '').split('@')[0]}`; }
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-cmd({ pattern: 'love', alias: ['lovecard', 'pyarlove'], desc: 'Send a cute love/friendship card', category: 'love', react: '💞', use: '.love @user' }, async (conn, mek, m, ctx) => {
+cmd({ pattern: 'lovecard', alias: ['pyarlove'], desc: 'Send a cute love/friendship card', category: 'love', react: '💞', use: '.love @user' }, async (conn, mek, m, ctx) => {
   const target = getMentioned(mek)[0] || ctx.sender;
   const lines = [
     `╭━━━〔 💞 𝐀 𝐋𝐈𝐓𝐓𝐋𝐄 𝐋𝐎𝐕𝐄 𝐍𝐎𝐓𝐄 💞 〕━━━╮`,
@@ -23,7 +23,7 @@ cmd({ pattern: 'love', alias: ['lovecard', 'pyarlove'], desc: 'Send a cute love/
   return conn.sendMessage(ctx.from, { text: lines.join('\n'), mentions: [target] }, { quoted: mek });
 });
 
-cmd({ pattern: 'hug', alias: ['virtualhug', 'jadujappi'], desc: 'Send a wholesome virtual hug', category: 'love', react: '🫂', use: '.hug @user' }, async (conn, mek, m, ctx) => {
+cmd({ pattern: 'virtualhug', alias: ['jadujappi'], desc: 'Send a wholesome virtual hug', category: 'love', react: '🫂', use: '.virtualhug @user' }, async (conn, mek, m, ctx) => {
   const target = getMentioned(mek)[0] || ctx.sender;
   const msg = `╭━━━〔 🫂 𝐕𝐈𝐑𝐓𝐔𝐀𝐋 𝐇𝐔𝐆 🫂 〕━━━╮\n\n  🥹💗 ${tag(target)}, here is a warm virtual hug!\n  🌷 Whatever kind of day you're having,\n  may a little kindness make it brighter.\n  🦋 You matter. Keep smiling!\n\n╰━━━〔 💞 𝐒𝐄𝐍𝐓 𝐖𝐈𝐓𝐇 𝐂𝐀𝐑𝐄 〕━━━╯\n\n      💗 *RIZO ki taraf se* 🥲`;
   return conn.sendMessage(ctx.from, { text: msg, mentions: [target] }, { quoted: mek });

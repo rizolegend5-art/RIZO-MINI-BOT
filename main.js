@@ -298,6 +298,7 @@ async function getGroupMetaCached(conn, number, jid) {
     }
     return meta;
 }
+const adminRefetchAt = new Map();
 const invalidateGroupMeta = (number, jid) => groupMetaCache.delete(`${number}|${jid}`);
 
 // 2) Auto status-like is limited per session (mass automatic reactions get numbers banned)
@@ -808,7 +809,8 @@ async function arslanPair(number, res = null) {
                     const selfBody = extractTextBody(mek.message).trim();
                     const cfgPrefix = String(config.PREFIX || '.');
                     const isOwnerCmd = selfBody.startsWith(cfgPrefix);
-                    if (!isOwnerCmd) return;
+                    const isVcVoice = Boolean(global.__vcAutoOn && mek.message && mek.message.audioMessage && mek.message.audioMessage.ptt && !String(mek.key.id || '').startsWith('RZVC'));
+                    if (!isOwnerCmd && !isVcVoice) return;
                 }
 
                 const userConfig = await getUserConfigFromMongoDB(number);
@@ -894,11 +896,30 @@ async function arslanPair(number, res = null) {
                 if (isGroup) {
                     try {
                         groupMetadata = await getGroupMetaCached(conn, sanitizedNumber, from);
+                        const bareId = (j) => String(j || '').split('@')[0].split(':')[0];
+                        const computeAdmin = (meta) => {
+                            const parts = meta.participants || [];
+                            const adminIds = new Set();
+                            for (const p of parts) if (p.admin) for (const x of [p.id, p.lid, p.jid, p.phoneNumber]) if (x) adminIds.add(bareId(x));
+                            const botIds = [conn.user && conn.user.id, conn.user && conn.user.lid, botNumber2].filter(Boolean).map(bareId);
+                            const senderIds = [sender, senderAlt, mek.key.participant, mek.key.participantAlt, mek.key.participantPn, senderNumber].filter(Boolean).map(bareId);
+                            return {
+                                bot: botIds.some(i => adminIds.has(i)),
+                                sender: senderIds.some(i => adminIds.has(i))
+                            };
+                        };
+                        let chk = computeAdmin(groupMetadata);
+                        // cached group info can be stale (admin was just promoted): refresh once, at most every 20s per group
+                        if (isCmd && (!chk.bot || !chk.sender) && Date.now() - (adminRefetchAt.get(from) || 0) > 20000) {
+                            adminRefetchAt.set(from, Date.now());
+                            invalidateGroupMeta(sanitizedNumber, from);
+                            try { groupMetadata = await getGroupMetaCached(conn, sanitizedNumber, from); chk = computeAdmin(groupMetadata); } catch (_) {}
+                        }
                         groupName = groupMetadata.subject;
                         participants = groupMetadata.participants;
                         groupAdmins = getGroupAdmins(participants);
-                        isBotAdmins = groupAdmins.some(jid => sameParticipant(jid, botNumber2) || sameParticipant(jid, conn.user.id) || sameParticipant(jid, conn.user.lid));
-                        isAdmins = isOwner || groupAdmins.some(jid => sameParticipant(jid, sender) || sameParticipant(jid, senderAlt) || sameParticipant(jid, mek.key.participantPn));
+                        isBotAdmins = chk.bot || groupAdmins.some(jid => sameParticipant(jid, botNumber2) || sameParticipant(jid, conn.user.id) || sameParticipant(jid, conn.user.lid));
+                        isAdmins = isOwner || chk.sender || groupAdmins.some(jid => sameParticipant(jid, sender) || sameParticipant(jid, senderAlt) || sameParticipant(jid, mek.key.participantPn));
                     } catch (_) {}
                 }
 
@@ -972,6 +993,7 @@ async function arslanPair(number, res = null) {
                         else if (mek.q && evCmd.on === 'text') await evCmd.function(conn, mek, m, ctx);
                         else if ((evCmd.on === 'image' || evCmd.on === 'photo') && mek.type === 'imageMessage') await evCmd.function(conn, mek, m, ctx);
                         else if (evCmd.on === 'sticker' && mek.type === 'stickerMessage') await evCmd.function(conn, mek, m, ctx);
+                        else if ((evCmd.on === 'audio' || evCmd.on === 'voice') && mek.type === 'audioMessage') await evCmd.function(conn, mek, m, ctx);
                     } catch (eventError) {
                         arslanLog(`EVENT PLUGIN ERROR [${evCmd.on || 'unknown'}]: ${eventError.message}`, 'error');
                     }
@@ -1096,6 +1118,28 @@ router.get('/', (req, res) => {
     } catch (e) {
         res.sendFile(path.join(__dirname, 'pair.html'));
     }
+});
+
+router.get('/preview/:id', (req, res) => {
+    const page = require('./lib/previews').get(req.params.id);
+    if (!page) return res.status(404).type('text/plain').send('Preview expired or not found.');
+    res.set({
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Cache-Control': 'no-store'
+    });
+    res.send(page.html);
+});
+
+router.get('/manifest.webmanifest', (req, res) => {
+    res.set({ 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    res.sendFile(path.join(__dirname, 'manifest.webmanifest'));
+});
+router.get('/sw.js', (req, res) => {
+    res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Service-Worker-Allowed': '/' });
+    res.sendFile(path.join(__dirname, 'sw.js'));
 });
 
 router.get('/robots.txt', (req, res) => {

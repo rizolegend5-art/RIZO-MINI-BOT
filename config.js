@@ -66,7 +66,7 @@ module.exports = {
     // ===========================================================
     // 7. IMAGES & LIENS
     // ===========================================================
-    IMAGE_PATH: process.env.IMAGE_PATH || "https://files.catbox.moe/3tz8tt.jpg",
+    IMAGE_PATH: process.env.IMAGE_PATH || "https://files.catbox.moe/58675i.png",
     CHANNEL_LINK: "https://whatsapp.com/channel/0029VbE72MB2Jl87sS5pvR0g",
 
     // ===========================================================
