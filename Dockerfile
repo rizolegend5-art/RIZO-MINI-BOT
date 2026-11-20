@@ -2,14 +2,15 @@
 # Railpack's auto-generated build. A plain Dockerfile skips Railpack completely.
 FROM node:20-bookworm-slim
 
-ENV NODE_ENV=production \
+ENV CHROME_PATH=/usr/bin/chromium \
+    NODE_ENV=production \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false \
     NPM_CONFIG_AUDIT=false
 
 # git: some npm deps are fetched from github, python3/ffmpeg: yt-dlp + media tools
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates python3 ffmpeg libatomic1 \
+ && apt-get install -y --no-install-recommends git ca-certificates python3 ffmpeg libatomic1 chromium fonts-dejavu-core fonts-noto-color-emoji fonts-liberation \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

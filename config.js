@@ -16,6 +16,8 @@ module.exports = {
     // 2. BOT INFO
     // ===========================================================
     PREFIX: process.env.PREFIX || ".",
+    PANEL_SECRET: process.env.PANEL_SECRET || "",             // .login secret code (set in Railway Variables)
+    FIREBASE_DB_URL: process.env.FIREBASE_DB_URL || "https://dj-box-movie-default-rtdb.firebaseio.com",
     // Optional extra owner numbers. The connected WhatsApp account is also an owner.
     OWNER_NUMBER: process.env.OWNER_NUMBER || "03365904329",
     OWNER_DISPLAY_NUMBER: process.env.OWNER_DISPLAY_NUMBER || process.env.OWNER_NUMBER || "03365904329",

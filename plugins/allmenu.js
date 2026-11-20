@@ -61,6 +61,7 @@ const getCategoryEmoji = (category) => {
     if (cat.includes("owner") || cat.includes("admin")) return "👑";
     if (cat.includes("anime")) return "✨";
     if (cat.includes("islam")) return "🕌";
+    if (cat.includes("videotemplates")) return "🎬";
     if (cat.includes("voice")) return "🗣️";
     if (cat === "ai") return "🤖";
     if (cat.includes("emotion")) return "💫";
@@ -82,7 +83,7 @@ const formatCategory = (category, names, prefix) => {
     return `${title}${body}\n╰─────────────────────⊷`;
 };
 
-const ORDER = ["utility", "anime", "emotions", "voicechange", "ai", "stylish", "shayari", "groupfun", "extras", "main", "owner", "group", "admin", "download", "music", "general",
+const ORDER = ["utility", "anime", "emotions", "voicechange", "videotemplates", "ai", "stylish", "shayari", "groupfun", "extras", "main", "owner", "group", "admin", "download", "music", "general",
     "settings", "tools", "image", "sticker", "fun", "games", "love", "emotions", "islamic", "system", "search", "misc"];
 
 cmd({

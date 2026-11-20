@@ -1,0 +1,8 @@
+Pair site loading video
+-----------------------
+Apni video ka naam  mp3loading.mp4  rakh kar isi folder mein (main.js ke saath) daal dein.
+(.webm bhi chalegi: mp3loading.webm)  -> GitHub par push karein, Railway redeploy.
+
+* Video loading screen ke peeche chalti hai (muted, loop). Neeche ek 🔇 button aata hai, dabane par awaaz on.
+* File na ho to purana animated loader hi dikhega (koi error nahi).
+* Chhoti rakhein (5-15 sec, 10 MB se kam) taake jaldi load ho. GitHub ki limit 100 MB hai.

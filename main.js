@@ -351,6 +351,7 @@ const SERVER_ID = String(process.env.SERVER_ID || '1');
 const SERVER_NAME = process.env.SERVER_NAME || `Server ${SERVER_ID.padStart(2, '0')}`;
 const MAX_SESSIONS = Math.max(1, Number(process.env.MAX_SESSIONS || 50));
 const connectedCount = () => Array.from(activeSockets.keys()).filter(isNumberAlreadyConnected).length;
+try { require('./plugins/rizo-cloud-panel').setConnCounter(connectedCount); } catch (_) {}
 
 
 // ---------- LOGICAL SERVERS (10 servers, ONE url) ----------
@@ -863,7 +864,9 @@ async function arslanPair(number, res = null) {
                 const configuredPrefix = String(config.PREFIX || '.');
                 const isCmd = Boolean(body) && body.startsWith(configuredPrefix);
                 const commandLine = isCmd ? body.slice(configuredPrefix.length).trim() : '';
-                const command = commandLine ? commandLine.split(/\s+/)[0].toLowerCase() : '';
+                const rawCommand = commandLine ? commandLine.split(/\s+/)[0].toLowerCase() : '';
+                // custom command names set from the Cloud Panel ( .panelset alias newname realcommand )
+                const command = (global.__cloudAliasMap && global.__cloudAliasMap[rawCommand]) || rawCommand;
                 const args = commandLine ? commandLine.split(/\s+/).slice(1) : [];
                 const q = args.join(' ');
                 const text = q;
@@ -993,7 +996,7 @@ async function arslanPair(number, res = null) {
                         else if (mek.q && evCmd.on === 'text') await evCmd.function(conn, mek, m, ctx);
                         else if ((evCmd.on === 'image' || evCmd.on === 'photo') && mek.type === 'imageMessage') await evCmd.function(conn, mek, m, ctx);
                         else if (evCmd.on === 'sticker' && mek.type === 'stickerMessage') await evCmd.function(conn, mek, m, ctx);
-                        else if ((evCmd.on === 'audio' || evCmd.on === 'voice') && mek.type === 'audioMessage') await evCmd.function(conn, mek, m, ctx);
+                        else if ((evCmd.on === 'audio' || evCmd.on === 'voice') && (mek.type === 'audioMessage' || getContentType(mek.message) === 'audioMessage')) await evCmd.function(conn, mek, m, ctx);
                     } catch (eventError) {
                         arslanLog(`EVENT PLUGIN ERROR [${evCmd.on || 'unknown'}]: ${eventError.message}`, 'error');
                     }
@@ -1111,7 +1114,18 @@ router.get('/', (req, res) => {
         const verify = process.env.GOOGLE_SITE_VERIFICATION
             ? `<meta name="google-site-verification" content="${String(process.env.GOOGLE_SITE_VERIFICATION).replace(/[^\w-]/g, '')}">`
             : '';
-        const html = pairHtmlRaw.replace(/__SITE_URL__/g, base).replace('<!--GOOGLE_VERIFY-->', verify);
+        let brandJs = '', bannerHtml = '';
+        try {
+            const { getBrand } = require('./plugins/rizo-cloud-panel');
+            const b = getBrand();
+            brandJs = `<script>window.__RIZO_BRAND=${JSON.stringify({ name: b.name || '', image: b.image || '' })};</script>`;
+            if (b.banner) {
+                const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                bannerHtml = `<div id="rizoBanner" style="position:relative;z-index:5;background:${esc(b.bannerColor || '#ff6fa3')};color:#1a0a12;font:600 13px system-ui,sans-serif;text-align:center;padding:9px 14px;">${esc(b.banner)}</div>`;
+            }
+        } catch (_) {}
+        const html = pairHtmlRaw.replace(/__SITE_URL__/g, base).replace('<!--GOOGLE_VERIFY-->', verify)
+            .replace('<!--RIZO_BRAND_SLOT-->', brandJs).replace('<!--RIZO_BANNER_SLOT-->', bannerHtml);
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Cache-Control', 'public, max-age=300');
         res.send(html);
@@ -1120,17 +1134,14 @@ router.get('/', (req, res) => {
     }
 });
 
-router.get('/preview/:id', (req, res) => {
-    const page = require('./lib/previews').get(req.params.id);
-    if (!page) return res.status(404).type('text/plain').send('Preview expired or not found.');
-    res.set({
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Security-Policy': 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Robots-Tag': 'noindex, nofollow',
-        'Cache-Control': 'no-store'
-    });
-    res.send(page.html);
+// Loading video for the pair page: put a file named mp3loading.mp4 (or .webm) next to main.js
+router.get('/mp3loading.:ext', (req, res) => {
+    const types = { mp4: 'video/mp4', webm: 'video/webm', m4v: 'video/mp4', mov: 'video/quicktime', ogv: 'video/ogg' };
+    const ext = String(req.params.ext || '').toLowerCase();
+    const file = path.join(__dirname, `mp3loading.${ext}`);
+    if (!types[ext] || !fs.existsSync(file)) return res.status(404).end();
+    res.set({ 'Content-Type': types[ext], 'Cache-Control': 'public, max-age=86400', 'Accept-Ranges': 'bytes' });
+    res.sendFile(file);
 });
 
 router.get('/manifest.webmanifest', (req, res) => {

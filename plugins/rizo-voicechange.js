@@ -1,7 +1,15 @@
 // RIZO VOICECHANGE — 11 commands: vcboy vccartoon vcchild vcdeep vcecho vcgirl vcman vcmenu vcoff vcrobot vcwoman
-//  * Reply to a voice note / audio with .vcboy (etc.)  -> bot sends it back in the new voice
-//  * Owner sends .vcgirl (no reply) -> AUTO mode: every voice note the owner sends is converted (original deleted)
-//  * .vcoff stops auto mode, .vcmenu shows this list
+//
+//  OLD voice  : voice note ko REPLY karke .vcgirl (etc.)  -> badli hui voice wapas aati hai
+//  NEW voices : owner chat mein .vcgirl likhe -> us chat mein owner ki har NAYI voice us awaaz mein badal jati hai
+//               (doosron ki / purani voices kabhi nahi chhooi jatin)
+//  STEALTH    : * command chat mein likhne par bot command message delete kar deta hai aur confirmation sirf
+//                 "Message yourself" chat mein bhejta hai (samne wale ko kuch nahi dikhta)
+//               * SECRET ROUTE (koi nishaan nahi): "Message yourself" mein voice record karo -> bot badal kar
+//                 pichli ON chat mein normal voice note ki tarah bhej deta hai (delete/tombstone nahi hota)
+//               * seedha chat mein voice bhejne par asli wali delete hoti hai -> samne wale ko
+//                 "This message was deleted" dikh sakta hai (WhatsApp ki hadd, bot chhupa nahi sakta)
+//  .vcoff     : is chat ke liye band (self chat mein likho to sab band)
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -27,9 +35,16 @@ const VOICES = {
 };
 const ORDER = ['vcboy', 'vccartoon', 'vcchild', 'vcdeep', 'vcecho', 'vcgirl', 'vcman', 'vcmenu', 'vcoff', 'vcrobot', 'vcwoman'];
 
-let AUTO = null;                    // currently active voice key (owner's own voice notes)
-const sync = () => { global.__vcAutoOn = Boolean(AUTO); };
+const CHATS = new Map();            // chat jid -> voice key (only the OWNER's new voice notes in that chat)
+let LAST = null;                    // most recently switched-on chat (target of the secret route)
+const sync = () => { global.__vcAutoOn = CHATS.size > 0; };
 sync();
+let working = 0;
+
+const bare = (j) => String(j || '').split('@')[0].split(':')[0];
+const selfIds = (conn) => [conn.user && conn.user.id, conn.user && conn.user.lid].filter(Boolean).map(bare);
+const isSelfChat = (conn, jid) => selfIds(conn).includes(bare(jid));
+const selfJid = (conn) => `${bare(conn.user.id)}@s.whatsapp.net`;
 
 const run = (args) => new Promise((resolve, reject) => execFile(ffmpegBin, args, { timeout: 60000 }, (err, so, se) => err ? reject(new Error((se || err.message || '').toString().split('\n').slice(-3).join(' ').slice(0, 200))) : resolve()));
 
@@ -54,52 +69,87 @@ const download = async (audioMsg) => {
     const chunks = []; for await (const c of stream) chunks.push(c);
     return Buffer.concat(chunks);
 };
+// 'RZVC' marker lets us ignore our own converted notes (never visible to anyone)
 const sendVoice = (conn, jid, buf, opts = {}) => conn.sendMessage(jid, { audio: buf, mimetype: 'audio/ogg; codecs=opus', ptt: true }, { messageId: 'RZVC' + crypto.randomBytes(8).toString('hex').toUpperCase(), ...opts });
+const quietDelete = (conn, mek) => conn.sendMessage(mek.key.remoteJid, { delete: mek.key }).catch(() => {});
 
-// ---- 9 voice commands
+// ---- the 9 voice commands
 for (const key of Object.keys(VOICES)) {
     const v = VOICES[key];
-    cmd({ pattern: key, category: 'voicechange', react: v.emoji, desc: `${v.name} voice — ${v.desc}`, use: `.${key} (voice note ko reply karo)`, filename: __filename },
+    cmd({ pattern: key, category: 'voicechange', react: '', desc: `${v.name} voice — ${v.desc}`, use: `.${key} (purani voice ko reply karo, ya chat mein likho = nayi voices badlen)`, filename: __filename },
     async (conn, mek, m, ctx) => {
+        const owner = ctx.isOwner || ctx.isCreator || ctx.isMe;
+        // 1) reply on an old voice note -> convert that one (works for everyone)
         const qa = m.quoted && (m.quoted.msg && m.quoted.mtype === 'audioMessage' ? m.quoted.msg : null);
         if (qa) {
-            try {
-                const out = await convert(await download(qa), key);
-                await sendVoice(conn, ctx.from, out, { quoted: mek });
-            } catch (e) { await ctx.reply(`❌ Voice badalne mein masla: ${e.message}`); }
+            try { await sendVoice(conn, ctx.from, await convert(await download(qa), key), { quoted: mek }); }
+            catch (e) { await ctx.reply(`❌ Voice badalne mein masla: ${e.message}`); }
             return;
         }
-        if (ctx.isOwner || ctx.isCreator || ctx.isMe) {
-            AUTO = key; sync();
-            return ctx.reply(`${v.emoji} *${v.name} Voice ON*\n\nAb aap ka har *voice note* is awaaz mein badal kar jayega (asli wala delete ho jayega).\n\n⏹️ Band karne ke liye: *.vcoff*\n🎧 Ya kisi voice note ko reply karke *.${key}* likho.`);
+        if (!owner) return ctx.reply(`🎧 Kisi *voice note* ko reply karke *.${key}* likho.`);
+
+        // 2) owner: switch the mode on for a chat
+        const digits = (ctx.q || '').replace(/\D/g, '');
+        const inSelf = isSelfChat(conn, ctx.from);
+        let target = ctx.from;
+        if (digits.length >= 8) target = `${digits}@s.whatsapp.net`;                 // .vcgirl 923001234567
+        else if (inSelf) {
+            if (LAST) { CHATS.set(LAST, key); sync(); return ctx.reply(`${v.emoji} *${v.name}* ab pichli ON chat ke liye set ho gayi.\n🤫 Secret route: yahin (Message yourself) voice record karo — badal kar us chat mein chali jayegi.`); }
+            return ctx.reply(`🤫 Kis chat ke liye? Us chat mein *.${key}* likho, ya yahan *.${key} 923001234567* likho.`);
         }
-        await ctx.reply(`🎧 Kisi *voice note* ko reply karke *.${key}* likho.`);
+        CHATS.set(target, key); LAST = target; sync();
+        const label = target.endsWith('@g.us') ? 'is group' : `+${bare(target)}`;
+        const note = `${v.emoji} *${v.name} Voice ON* — ${label}\n\n✅ Is chat mein aap ki har *nayi* voice is awaaz mein badal jayegi (purani/doosron ki nahi).\n🤫 *Secret route:* yahin "Message yourself" mein voice record karo — bot normal voice ki tarah us chat mein bhej dega, koi nishaan nahi.\n🎧 Purani voice ke liye: usay reply karke *.${key}*\n⏹️ Band: us chat mein *.vcoff*`;
+        if (!inSelf) {                                  // stealth: erase the command, tell only yourself
+            await quietDelete(conn, mek);
+            await conn.sendMessage(selfJid(conn), { text: note });
+        } else await ctx.reply(note);
     });
 }
 // ---- vcoff
-cmd({ pattern: 'vcoff', category: 'voicechange', react: '⏹️', desc: 'Voice change band karo', use: '.vcoff', filename: __filename },
+cmd({ pattern: 'vcoff', category: 'voicechange', react: '', desc: 'Voice change band karo', use: '.vcoff', filename: __filename },
 async (conn, mek, m, ctx) => {
-    const was = AUTO; AUTO = null; sync();
-    await ctx.reply(was ? `⏹️ *${VOICES[was].name} Voice* band. Ab aap ki awaaz normal jayegi.` : '⏹️ Voice change pehle se band hai.');
+    const owner = ctx.isOwner || ctx.isCreator || ctx.isMe;
+    if (!owner) return;
+    const inSelf = isSelfChat(conn, ctx.from);
+    const digits = (ctx.q || '').replace(/\D/g, '');
+    let msg;
+    if (inSelf && digits.length < 8) { const n = CHATS.size; CHATS.clear(); LAST = null; msg = n ? `⏹️ Sab chats ki voice change band (${n}).` : '⏹️ Voice change pehle se band hai.'; }
+    else { const t = digits.length >= 8 ? `${digits}@s.whatsapp.net` : ctx.from; const had = CHATS.delete(t); if (LAST === t) LAST = null; msg = had ? '⏹️ Is chat ki voice change band. Ab awaaz normal jayegi.' : '⏹️ Is chat mein voice change pehle se band hai.'; }
+    sync();
+    if (!inSelf) { await quietDelete(conn, mek); await conn.sendMessage(selfJid(conn), { text: msg }); } else await ctx.reply(msg);
 });
-// ---- vcmenu (same look as the category box)
-cmd({ pattern: 'vcmenu', category: 'voicechange', react: '🗣️', desc: 'Voice change ki list', use: '.vcmenu', filename: __filename },
+// ---- vcmenu
+cmd({ pattern: 'vcmenu', category: 'voicechange', react: '', desc: 'Voice change ki list', use: '.vcmenu', filename: __filename },
 async (conn, mek, m, ctx) => {
     const P = (require('../config').PREFIX || '.');
     const rows = ORDER.map(k => `│ ➤ *${P}${k.toUpperCase()}*`).join('\n');
-    await ctx.reply(`┌══〔 🗣️ *VOICECHANGE* 〕══┐\n╰═╗\n${rows}\n╰══◇ *${ORDER.length} COMMANDS* ◇══╯\n\n🎧 *Kaise use karein*\n• Voice note ko reply karo: *${P}vcgirl*\n• Ya (sirf owner) *${P}vcdeep* likho — phir aap ka har voice note badal kar jayega\n• Band: *${P}vcoff*\n\n📌 Abhi: *${AUTO ? VOICES[AUTO].name + ' (auto ON)' : 'OFF'}*`);
+    const here = CHATS.get(ctx.from);
+    await ctx.reply(`┌══〔 🗣️ *VOICECHANGE* 〕══┐\n╰═╗\n${rows}\n╰══◇ *${ORDER.length} COMMANDS* ◇══╯\n\n🎧 *Kaise use karein*\n• *Purani voice:* usay reply karo *${P}vcgirl*\n• *Nayi voices:* chat mein *${P}vcdeep* likho (owner) — us chat mein aap ki har nayi voice badal jayegi\n• *Secret route:* "Message yourself" mein voice record karo, bot badal kar us chat mein bhej dega (koi nishaan nahi)\n• Band: *${P}vcoff*\n\n📌 Active chats: *${CHATS.size}* • yahan: *${here ? VOICES[here].name + ' ON' : 'OFF'}*`);
 });
 
-// ---- auto mode: owner's own voice notes
+// ---- new voices of the OWNER
 cmd({ on: 'audio', allowUnprefixedInGroups: true, dontAddCommandList: true, filename: __filename },
 async (conn, mek, m, ctx) => {
-    if (!AUTO || !mek.key.fromMe) return;
-    if (String(mek.key.id || '').startsWith('RZVC')) return;                 // our own converted note
+    if (!mek.key.fromMe || !CHATS.size) return;                                // only the owner's own, only when something is ON
+    if (String(mek.key.id || '').startsWith('RZVC')) return;                   // our own converted note
     const am = mek.message && mek.message.audioMessage;
     if (!am || !am.ptt || Number(am.seconds || 0) > 180) return;
+    const chat = ctx.from;
+    const selfRoute = isSelfChat(conn, chat);
+    const target = selfRoute ? LAST : chat;
+    const key = target && CHATS.get(target);
+    if (!key) return;
+    // a voice note only counts as "new" if it was just sent (old/forwarded history is never touched)
+    const ts = Number(mek.messageTimestamp && (mek.messageTimestamp.low !== undefined ? mek.messageTimestamp.low : mek.messageTimestamp)) || 0;
+    if (ts && Date.now() / 1000 - ts > 90) return;
+    if (working >= 3) return;
+    working++;
     try {
-        const out = await convert(await download(am), AUTO);
-        await sendVoice(conn, ctx.from, out);
-        await conn.sendMessage(ctx.from, { delete: mek.key }).catch(() => {});
+        const out = await convert(await download(am), key);
+        await sendVoice(conn, target, out);                                    // looks like a normal voice from you
+        if (selfRoute) await conn.sendMessage(chat, { react: { text: '✅', key: mek.key } }).catch(() => {});
+        else await quietDelete(conn, mek);                                     // swap in place (the original is removed)
     } catch (e) { console.log('[vc] auto convert failed:', e.message); }
+    finally { working--; }
 });
