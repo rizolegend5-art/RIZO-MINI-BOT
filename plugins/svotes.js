@@ -133,11 +133,11 @@ Vote: ${P}svotes <link> 1`
 
     if (!res.ok) {
         const why = Object.keys(res.errors || {})[0] || res.error || 'unknown';
-        if (/not available/i.test(why)) {
+        if (/not available|function hi nahi hai/i.test(why)) {
             return ctx.reply(
 `❌ *Channel poll par vote nahi ja sakta.*
 
-🔧 Wajah: bot ki WhatsApp library (Baileys 7.0.0-rc14) mein channel poll vote bhejne ka tareeqa maujood hi nahi.
+🔧 Wajah: bot ki WhatsApp library (Baileys) mein is waqt channel-poll vote bhejne ka koi function nahi mila — bot ne kai mumkin naam try kiye.
 
 ⚠️ Pehle jo "Success" aata tha wo galat tha: request chali jati thi lekin vote count nahi hota tha (aap ke screenshot mein poll 0 hi raha). Is ghalti ke liye maazrat.
 
