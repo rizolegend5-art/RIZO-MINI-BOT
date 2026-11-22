@@ -68,7 +68,7 @@ module.exports = {
     // ===========================================================
     // 7. IMAGES & LIENS
     // ===========================================================
-    IMAGE_PATH: process.env.IMAGE_PATH || "https://files.catbox.moe/58675i.png",
+    IMAGE_PATH: process.env.IMAGE_PATH || "https://i.postimg.cc/65n8yzcp/rizo-md.jpg",
     CHANNEL_LINK: "https://whatsapp.com/channel/0029VbE72MB2Jl87sS5pvR0g",
 
     // ===========================================================

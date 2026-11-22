@@ -63,7 +63,7 @@ cmd({
         //  1. IMAGE (with short caption only)
         // ═══════════════════════════════════════════
         await conn.sendMessage(from, {
-            image: { url: 'https://files.catbox.moe/58675i.png' },
+            image: { url: 'https://i.postimg.cc/65n8yzcp/rizo-md.jpg' },
             caption:
 `${CROWN} ${G.double('GANGSTER MODE')} ${CROWN}
 

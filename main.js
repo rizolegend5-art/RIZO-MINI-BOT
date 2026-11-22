@@ -357,7 +357,7 @@ try { require('./plugins/rizo-cloud-panel').setConnCounter(connectedCount); } ca
 // ---------- LOGICAL SERVERS (10 servers, ONE url) ----------
 // One process, one URL. The pair site shows LOGICAL_SERVERS servers; every user picks one and the number
 // is registered on it. Live counts are REAL: number of connected sessions assigned to each logical server.
-const LOGICAL_SERVERS = Math.min(50, Math.max(1, Number(process.env.LOGICAL_SERVERS || 10)));
+const LOGICAL_SERVERS = Math.min(50, Math.max(1, Number(process.env.LOGICAL_SERVERS || 30)));
 const LOGICAL_CAPACITY = Math.max(1, Number(process.env.LOGICAL_CAPACITY || 25));
 const shardOf = new Map();   // number -> '1'..'N'
 const shardFile = path.join(__dirname, 'data', 'shards.json');
