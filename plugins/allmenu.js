@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const { runtime } = require("../lib/functions");
 const { getBotPic } = require("../lib/botpic");
+const { getUserConfigFromMongoDB } = require("../lib/database");
 
 const UPDATE_CHANNEL_JID = "120363415257798894@newsletter";
 // Channel JID is taken from config.CHANNEL_LINK automatically (cached after the first lookup).
@@ -115,7 +116,9 @@ cmd({
         }
 
         const PREFIX = config.PREFIX || ".";
-        const BOT_NAME = String(config.BOT_NAME || "RIZO-MD").replace(/(\s*[-_ ]\s*bot)+\s*$/i, "").trim() || "RIZO-MD";
+        // per-user name (set via .setbotname) wins for THIS sender only; everyone else still sees the shared default
+        const uc = await getUserConfigFromMongoDB(ctx.senderNumber).catch(() => ({}));
+        const BOT_NAME = String(uc.BOT_NAME || config.BOT_NAME || "RIZO-MD").replace(/(\s*[-_ ]\s*bot)+\s*$/i, "").trim() || "RIZO-MD";
         const OWNER_NAME = config.OWNER_NAME || "Owner";
         const MODE = config.WORK_TYPE || "public";
 

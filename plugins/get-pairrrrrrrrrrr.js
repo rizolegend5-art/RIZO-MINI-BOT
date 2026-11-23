@@ -1,98 +1,96 @@
-const { cmd, commands } = require('../arslan');
+// plugins/get-pairrrrrrrrrrr.js
+// .pair / .pair2 — pairing code ab BOT KE APNE /code route se aata hai (is hi server ka pair site wala system).
+// Pehle yeh kisi aur ke Heroku server (arslan-mini-bot-...herokuapp.com) se code mangta tha jo ab band hai,
+// isi liye hamesha error aata tha.
+//
+// Optional env:  PAIR_API_URL = https://tumhara-pair-site.com   (kisi doosre server ka /code use karna ho to)
+//                PORT        = server ka port (default 8000)
+
+const { cmd } = require('../arslan');
 const axios = require('axios');
+const config = require('../config');
+
+const baseUrl = () => String(process.env.PAIR_API_URL || `http://127.0.0.1:${process.env.PORT || 8000}`).replace(/\/+$/, '');
+
+// Returns { code } on success, or { error: "<insaan ke samajhne wala message>" }
+async function requestPairCode(number) {
+    try {
+        const r = await axios.get(`${baseUrl()}/code`, {
+            params: { number },
+            timeout: 70000,
+            headers: { Accept: 'application/json' }
+        });
+        const d = r.data || {};
+        if (d.code) return { code: String(d.code) };
+        if (d.status === 'already_connected') return { error: '✅ Yeh number pehle se connected hai — dobara pair ki zaroorat nahi.' };
+        if (d.status === 'connection_in_progress') return { error: '⏳ Is number ka connection abhi ban raha hai, 20 second baad dobara try karo.' };
+        if (d.status === 'reconnecting') return { error: '♻️ Is number ka purana session mil gaya, bot dobara connect ho raha hai. Naya code nahi chahiye.' };
+        return { error: `❌ Code nahi mila (${d.message || d.error || d.status || 'unknown reply'}).` };
+    } catch (e) {
+        const d = e.response && e.response.data;
+        if (d && (d.message || d.error)) return { error: `❌ ${d.message || d.error}` };
+        if (e.code === 'ECONNREFUSED') return { error: '❌ Bot ka apna server jawab nahi de raha (port galat ho sakta hai). Variables mein PORT / PAIR_API_URL check karo.' };
+        if (e.code === 'ECONNABORTED') return { error: '❌ Code banne mein bohat der lag gayi. Thori der baad dobara try karo.' };
+        return { error: `❌ Pair error: ${String(e.message || e).slice(0, 150)}` };
+    }
+}
+
+const cleanNumber = (q, fallback) => String(q || fallback || '').replace(/[^0-9]/g, '');
+const validNumber = n => n && n.length >= 10 && n.length <= 15;
 
 cmd({
-    pattern: "pair",
-    alias: ["getpaijsksnsr", "pairing", "clonebnsjdndnznot"],
-    react: "✅",
-    desc: "Get pairing code for RIZO-MD bot",
-    category: "download",
-    use: ".pair 92323***",
+    pattern: 'pair',
+    alias: ['getpaijsksnsr', 'pairing', 'clonebnsjdndnznot'],
+    react: '✅',
+    desc: 'Get pairing code for RIZO-MD bot',
+    category: 'download',
+    use: '.pair 92323xxxxxxx',
     filename: __filename
-}, async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, isGroup, senderNumber, reply }) => {
+}, async (conn, mek, m, { q, senderNumber, reply }) => {
     try {
-        // Extract phone number from command
-        const phoneNumber = q ? q.trim().replace(/[^0-9]/g, '') : senderNumber.replace(/[^0-9]/g, '');
+        const phoneNumber = cleanNumber(q, senderNumber);
+        if (!validNumber(phoneNumber)) return reply('❌ Sahi number likho, `+` ke baghair.\nMisal: `.pair 923231234567`');
 
-        // Validate phone number format
-        if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) {
-            return await reply("❌ Please provide a valid phone number without `+`\nExample: `.pair 92323***`");
-        }
+        const res = await requestPairCode(phoneNumber);
+        if (res.error) return reply(res.error);
 
-        // Make API request to get pairing code
-        const response = await axios.get(`https://arslan-mini-bot-e4ec84c138eb.herokuapp.com/code?number=${encodeURIComponent(phoneNumber)}`);
-
-        if (!response.data || !response.data.code) {
-            return await reply("❌ Failed to retrieve pairing code. Please try again later.");
-        }
-
-        const pairingCode = response.data.code;
-        const doneMessage = "> *PAIRING COMPLETED*";
-
-        // Send initial message with formatting
-        await reply(`${doneMessage}\n\n*Your pairing code is:* ${pairingCode}`);
-
-        // Optional 2-second delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Send clean code again
-        await reply(`${pairingCode}`);
-
+        await reply(`> *PAIRING CODE READY*\n\n*Your pairing code is:* ${res.code}\n\nWhatsApp > Linked Devices > Link with phone number mein yeh code daalo.`);
+        await new Promise(r => setTimeout(r, 1500));
+        await reply(res.code);
     } catch (error) {
-        console.error("Pair command error:", error);
-        await reply("❌ An error occurred while getting pairing code. Please try again later.");
+        console.error('Pair command error:', error);
+        await reply(`❌ Pair command error: ${String(error.message || error).slice(0, 150)}`);
     }
 });
 
 cmd({
-    pattern: "pair2",
-    alias: ["getpair2", "reqpair", "clonebot2"],
-    react: "📉",
-    desc: "Get pairing code for RIZO-MD bot",
-    category: "download",
-    use: ".pair 92323XXX",
+    pattern: 'pair2',
+    alias: ['getpair2', 'reqpair', 'clonebot2'],
+    react: '📉',
+    desc: 'Get pairing code for RIZO-MD bot (private chat)',
+    category: 'download',
+    use: '.pair2 92323xxxxxxx',
     filename: __filename
-}, async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, isGroup, senderNumber, reply }) => {
+}, async (conn, mek, m, { from, q, isGroup, senderNumber, reply }) => {
     try {
-        // Check if in group
-        if (isGroup) {
-            return await reply("❌ This command only works in private chat. Please message me directly.");
-        }
+        if (isGroup) return reply('❌ Yeh command sirf private chat mein chalti hai. Mujhe seedha message karo.');
 
-        // Show processing reaction
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+        const phoneNumber = cleanNumber(q, senderNumber);
+        if (!validNumber(phoneNumber)) return reply('❌ Number galat hai.\n\nIs tarah likho: `.pair2 923231234567` (+ ke baghair)');
 
-        // Extract phone number
-        const phoneNumber = q ? q.trim().replace(/[^0-9]/g, '') : senderNumber.replace(/[^0-9]/g, '');
+        await conn.sendMessage(from, { react: { text: '⏳', key: mek.key } }).catch(() => {});
+        const res = await requestPairCode(phoneNumber);
+        if (res.error) return reply(res.error);
 
-        // Validate phone number
-        if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) {
-            return await reply("❌ Invalid phone number format!\n\nPlease use: `.pair 92323000000000`\n(Without + sign)");
-        }
-
-        // Get pairing code from API
-        const response = await axios.get(`https://arslan-mini-bot-e4ec84c138eb.herokuapp.com/code?number=${encodeURIComponent(phoneNumber)}`);
-        
-        if (!response.data?.code) {
-            return await reply("❌ Failed to get pairing code. Please try again later.");
-        }
-
-        const pairingCode = response.data.code;
-        
-        // Send image with caption
-        const sentMessage = await conn.sendMessage(from, {
-            image: { url: "https://i.postimg.cc/65n8yzcp/rizo-md.jpg" },
-            caption: `- *⍴ᥲіrіᥒg ᥴ᥆ძᥱ*\n\n Notification has been sent to your WhatsApp. Please check your phone and copy this code to pair it and get your session id.\n\n*🔢 Pairing Code*: *${pairingCode}*\n\n> *Copy it from below message 👇🏻*`
+        await conn.sendMessage(from, {
+            image: { url: config.IMAGE_PATH || 'https://i.postimg.cc/65n8yzcp/rizo-md.jpg' },
+            caption: `- *PAIRING CODE*\n\nWhatsApp ki taraf se aap ko notification aayega. Phone check karo aur neeche wala code daalo.\n\n*🔢 Pairing Code*: *${res.code}*\n\n> *Copy karne ke liye neeche wala message dekho 👇🏻*`
         }, { quoted: m });
 
-        // Send clean code separately
-        await reply(pairingCode);
-        
-        // Add ✅ reaction to the clean code message
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
+        await reply(res.code);
+        await conn.sendMessage(from, { react: { text: '✅', key: mek.key } }).catch(() => {});
     } catch (error) {
-        console.error("Pair command error:", error);
-        await reply("❌ An error occurred. Please try again later.");
+        console.error('Pair2 command error:', error);
+        await reply(`❌ Pair2 error: ${String(error.message || error).slice(0, 150)}`);
     }
 });

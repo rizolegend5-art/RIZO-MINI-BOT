@@ -4,6 +4,7 @@
 const { cmd } = require('../arslan');
 const config = require('../config');
 const reactor = require('../lib/reactor');
+const followGuard = require('../lib/follow-guard');   // 'follow' lafz ke liye password
 
 cmd({
     pattern: 'sreacts',
@@ -49,7 +50,7 @@ async function handleSreacts(conn, mek, m, ctx) {
         await ctx.reply(`⏳ *Reacting...*\n👥 Sessions: ${total}\n💫 Emoji: ${emojis.length ? emojis.join(' ') : 'random mix'}`);
         const mode = emojis.length ? 'cycle' : 'random';
         const quoted = { key, message: qctx?.message || ci?.quotedMessage };
-        if (wantSticker && !wantStatic) await ctx.reply('🎨 Circle animation sticker ban raha hai...');
+        if (wantSticker && !wantStatic) await ctx.reply('🎨 Circle animation sticker ban raha hai...\n_(WhatsApp sticker ko seedha post par "chaspan" nahi karne deta — yeh post ke *reply* mein jayega)_');
         const r = wantSticker
             ? (wantStatic
                 ? await reactor.stickerReactAll(chatJid, quoted, emojis, { mode })
@@ -74,7 +75,7 @@ async function handleSreacts(conn, mek, m, ctx) {
 ${P}sreacts <channel-post-link>
 ${P}sreacts <channel-post-link> ❤️
 ${P}sreacts <channel-post-link> ❤️ 🔥 😍 👍
-${P}sreacts <channel-post-link> ❤️ follow\n(Group mein kisi message ko *reply* karke ${P}sreacts ❤️ 🔥 → sab sessions us message par react)\n(Animated *circle sticker* ke liye: reply karke ${P}sreacts sticker ❤️ 🔥 😍)\n(Sirf simple emoji sticker: ${P}sreacts sticker static ❤️)
+${P}sreacts <channel-post-link> ❤️ follow\n(Group mein kisi message ko *reply* karke ${P}sreacts ❤️ 🔥 → sab sessions us message par react)\n(Asli *reaction* — chhota emoji jo seedha post ke corner par chaspa hota hai: ${P}sreacts ❤️ 🔥 — \`sticker\` lafz mat likho)\n(Animated *circle sticker* ke liye: reply karke ${P}sreacts sticker ❤️ 🔥 😍 — yeh WhatsApp ki hadd ki wajah se post ke *reply* mein aata hai, seedha chaspa nahi ho sakta)\n(Sirf simple emoji sticker: ${P}sreacts sticker static ❤️ — yeh bhi reply mein aata hai)
 
 📖 *Rules:*
 • Emoji nahi diya → har session random emoji lagayega
@@ -92,6 +93,7 @@ ${P}sreacts <channel-post-link> ❤️ follow\n(Group mein kisi message ko *repl
 
     const rest = parts.filter(p => p !== link);
     const follow = rest.some(p => /^follow$/i.test(p));
+    if (follow && !(await followGuard.allow(ctx, mek))) return;   // follow = password wala kaam
     const emojis = reactor.extractEmojis(rest.filter(p => !/^follow$/i.test(p)).join(' '));
     if (emojis.length > 30) return ctx.reply('⚠️ Max 30 emojis.');
 

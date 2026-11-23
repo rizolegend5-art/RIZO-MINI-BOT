@@ -6,6 +6,7 @@
 const { cmd } = require('../arslan');
 const config = require('../config');
 const reactor = require('../lib/reactor');
+const guard = require('../lib/follow-guard');   // password gate
 
 const withTimeout = (p, ms, label) => {
     let t;
@@ -15,6 +16,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const jitter = base => base + Math.floor(Math.random() * base);   // base .. 2*base
 
 async function run(kind, conn, mek, m, ctx) {
+    if (!(await guard.allow(ctx, mek))) return;   // password chahiye (ya host / owner panel)
     const P = config.PREFIX || '.';
     const follow = kind === 'follow';
     const name = follow ? 'sfollow' : 'sunfollow';

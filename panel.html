@@ -1,6 +1,208 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RIZO Panel</title>
-<style>body{font-family:system-ui;background:#0b0f14;color:#e6edf3;margin:0;padding:20px}input,button{padding:10px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3}pre{background:#161b22;padding:12px;border-radius:8px;overflow:auto}</style></head><body>
-<h2>RIZO Panel</h2><input id="t" type="password" placeholder="RIZO_PANEL_TOKEN"> <button onclick="go()">Load</button>
-<h3>Metrics</h3><pre id="m">-</pre><h3>Logs</h3><pre id="l">-</pre>
-<script>async function go(){const h={'x-panel-token':document.getElementById('t').value};
-for(const [u,id] of [['/api/panel/metrics','m'],['/api/panel/logs?limit=50','l']]){try{const r=await fetch(u,{headers:h});document.getElementById(id).textContent=JSON.stringify(await r.json(),null,2)}catch(e){document.getElementById(id).textContent=String(e)}}}</script></body></html>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>RIZO Owner Panel</title>
+<style>
+:root{--bg:#0b0f14;--card:#141a22;--line:#27303b;--tx:#e6edf3;--mu:#8b98a7;--ac:#25d366;--ac2:#0f9d58;--bad:#ff6b6b;--warn:#f5a623}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+input,select,button{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:100%}
+button{cursor:pointer}
+button:active{transform:scale(.97)}
+.wrap{max-width:1100px;margin:0 auto;padding:14px}
+h1{font-size:19px;margin:0 0 4px}
+.mu{color:var(--mu);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+#login{max-width:380px;margin:12vh auto 0}
+#login input{width:100%;margin:12px 0 8px}
+.pri{background:var(--ac2);border-color:var(--ac2);color:#fff;font-weight:600}
+.err{color:var(--bad);min-height:20px;font-size:13px;margin-top:8px}
+#app{display:none}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.bar>*{flex:1 1 150px}
+.tabs{display:flex;gap:6px;margin:6px 0 10px}
+.tabs button{flex:0 0 auto;padding:8px 14px}
+.tabs .on{background:var(--ac2);border-color:var(--ac2)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+.chips button{flex:0 0 auto;padding:6px 12px;border-radius:99px;font-size:13px;white-space:nowrap}
+.chips .on{background:var(--ac2);border-color:var(--ac2)}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:8px}
+#grid button{text-align:left;padding:10px;display:flex;flex-direction:column;gap:2px;min-height:54px}
+#grid b{font-size:14px;word-break:break-all}
+#grid small{color:var(--mu);font-size:11px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#grid .x{border-color:#6b4a14}
+#grid .x b::after{content:" ⚠";color:var(--warn)}
+#grid .run{outline:2px solid var(--ac)}
+#out{position:sticky;bottom:0;margin-top:12px;background:#0d1218;border:1px solid var(--line);border-radius:14px;padding:10px 12px;max-height:34vh;overflow:auto}
+#out pre{white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.ok{color:var(--ac)}.bd{color:var(--bad)}
+pre.box{background:#0d1218;border:1px solid var(--line);border-radius:10px;padding:10px;overflow:auto;font-size:12px;max-height:60vh}
+.hide{display:none!important}
+</style></head><body>
+
+<div id="login" class="card">
+  <h1>🔐 RIZO Owner Panel</h1>
+  <div class="mu">Token daal kar login karo (Variables mein <b>RIZO_PANEL_TOKEN</b> ya <b>PANEL_SECRET</b>).</div>
+  <input id="tok" type="password" placeholder="Panel token" autocomplete="current-password">
+  <label class="mu"><input id="rem" type="checkbox" style="width:auto;margin:0 6px 0 0">Is device par yaad rakho</label>
+  <button id="go" class="pri" style="width:100%;margin-top:12px">Login</button>
+  <div id="lerr" class="err"></div>
+</div>
+
+<div id="app" class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+    <div><h1>👑 RIZO Owner Panel</h1><div class="mu" id="sub">—</div></div>
+    <button id="logout">Logout</button>
+  </div>
+  <div class="tabs"><button data-t="cmds" class="on">⚡ Commands</button><button data-t="stat">📊 Status</button><button data-t="logs">📜 Logs</button></div>
+
+  <div id="t-cmds">
+    <div class="bar">
+      <select id="ses" class="hide"></select>
+      <select id="chat"><option value="self">📱 Apna chat (self)</option></select>
+      <button id="grp">👥 Groups load karo</button>
+    </div>
+    <div class="bar">
+      <input id="args" placeholder="Args (zaroorat ho to) — jaise number / link / text" autocomplete="off">
+      <input id="q" type="search" placeholder="🔎 Command dhoondo…" autocomplete="off">
+    </div>
+    <div class="mu" id="recentRow" style="margin:4px 0"></div>
+    <div class="chips" id="cats"></div>
+    <div id="grid"></div>
+    <div id="out" class="hide"><b id="outT"></b><pre id="outB"></pre></div>
+  </div>
+
+  <div id="t-stat" class="hide"><pre class="box" id="statB">…</pre><button id="statR">🔄 Refresh</button></div>
+  <div id="t-logs" class="hide"><pre class="box" id="logB">…</pre><button id="logR">🔄 Refresh</button></div>
+</div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+let TOKEN=sessionStorage.getItem('rzt')||localStorage.getItem('rzt')||'';
+let CMDS=[],PREFIX='.',CAT='all',RUN=0;
+
+async function api(path,opt){
+  opt=opt||{};
+  const r=await fetch(path,{method:opt.method||'GET',headers:Object.assign({'x-panel-token':TOKEN},opt.body?{'Content-Type':'application/json'}:{}),body:opt.body?JSON.stringify(opt.body):undefined});
+  let d={};try{d=await r.json()}catch(e){}
+  if(!r.ok){const e=new Error(d.error||('Error '+r.status));e.status=r.status;throw e}
+  return d;
+}
+
+async function login(){
+  $('#lerr').textContent='';
+  TOKEN=$('#tok').value.trim();
+  if(!TOKEN){$('#lerr').textContent='Token likho.';return}
+  try{
+    const me=await api('/api/panel/me');
+    (($('#rem').checked)?localStorage:sessionStorage).setItem('rzt',TOKEN);
+    start(me);
+  }catch(e){$('#lerr').textContent=e.message}
+}
+
+async function start(me){
+  $('#login').classList.add('hide');$('#app').style.display='block';
+  PREFIX=me.prefix||'.';
+  const s=$('#ses');s.innerHTML='';
+  me.sessions.forEach(x=>{const o=document.createElement('option');o.value=x.id;o.textContent='📲 '+x.label;s.appendChild(o)});
+  s.classList.toggle('hide',me.sessions.length<2);
+  $('#sub').textContent=me.sessions.length?('Host session connected: '+me.sessions.length):'⚠️ Host ka koi session connected nahi (OWNER_NUMBER check karo)';
+  const c=await api('/api/panel/commands');CMDS=c.commands;PREFIX=c.prefix||PREFIX;
+  buildCats();render();recent();
+}
+
+function buildCats(){
+  const m={};CMDS.forEach(c=>m[c.c]=(m[c.c]||0)+1);
+  const names=Object.keys(m).sort((a,b)=>(a==='owner'?-1:b==='owner'?1:m[b]-m[a]));
+  const box=$('#cats');box.innerHTML='';
+  [['all','Sab ('+CMDS.length+')']].concat(names.map(n=>[n,n+' ('+m[n]+')'])).forEach(([k,t])=>{
+    const b=document.createElement('button');b.textContent=t;b.dataset.k=k;if(k===CAT)b.className='on';
+    b.onclick=()=>{CAT=k;[...box.children].forEach(x=>x.className=x.dataset.k===k?'on':'');render()};
+    box.appendChild(b);
+  });
+}
+
+function render(){
+  const q=$('#q').value.trim().toLowerCase(),g=$('#grid');g.innerHTML='';
+  let list=CMDS.filter(c=>(CAT==='all'||c.c===CAT)&&(!q||c.n.includes(q)||c.d.toLowerCase().includes(q)||c.a.some(a=>a.includes(q))));
+  const total=list.length;list=list.slice(0,400);
+  list.forEach(c=>{
+    const b=document.createElement('button');b.dataset.n=c.n;if(c.x)b.className='x';
+    b.title=(c.u||PREFIX+c.n)+(c.d?'\n'+c.d:'');
+    const t=document.createElement('b');t.textContent=PREFIX+c.n;
+    const s=document.createElement('small');s.textContent=c.d||c.u||'';
+    b.append(t,s);b.onclick=()=>run(c,b);g.appendChild(b);
+  });
+  if(total>400){const m=document.createElement('div');m.className='mu';m.style.gridColumn='1/-1';m.textContent='Sirf pehle 400 dikha raha hoon ('+total+' mile) — search ya category se chhota karo.';g.appendChild(m)}
+  if(!total){const m=document.createElement('div');m.className='mu';m.style.gridColumn='1/-1';m.textContent='Koi command nahi mili.';g.appendChild(m)}
+}
+
+function recent(){
+  let r=[];try{r=JSON.parse(localStorage.getItem('rzr')||'[]')}catch(e){}
+  const row=$('#recentRow');row.textContent='';
+  if(!r.length)return;
+  row.append('Haal ki: ');
+  r.forEach(n=>{const c=CMDS.find(x=>x.n===n);if(!c)return;const b=document.createElement('button');b.textContent=PREFIX+n;b.style.cssText='padding:4px 10px;margin:2px;border-radius:99px;font-size:12px';b.onclick=()=>run(c);row.appendChild(b)});
+}
+
+function show(title,text,cls){
+  $('#out').classList.remove('hide');
+  $('#outT').textContent=title;$('#outT').className=cls||'';
+  $('#outB').textContent=text||'';
+}
+
+async function run(c,btn){
+  if(c.x&&!confirm(PREFIX+c.n+' khatarnaak/bari command hai. Pakka chalani hai?'))return;
+  const my=++RUN,args=$('#args').value.trim();
+  if(btn){btn.classList.add('run');setTimeout(()=>btn.classList.remove('run'),700)}
+  show('⏳ '+PREFIX+c.n+(args?' '+args:''),'Bhej raha hoon…');
+  try{
+    const r=await api('/api/panel/run',{method:'POST',body:{command:c.n,args,session:$('#ses').value,chat:$('#chat').value}});
+    let r2=[];try{r2=JSON.parse(localStorage.getItem('rzr')||'[]')}catch(e){}
+    localStorage.setItem('rzr',JSON.stringify([c.n].concat(r2.filter(x=>x!==c.n)).slice(0,8)));recent();
+    show('✅ '+PREFIX+c.n+' chal gayi','Jawab ka intezar… (poora jawab WhatsApp mein bhi aata hai)','ok');
+    for(let i=0;i<14&&my===RUN;i++){
+      await new Promise(r=>setTimeout(r,1500));
+      try{const d=await api('/api/panel/result?id='+r.id);
+        if(my!==RUN)return;
+        if(d.lines.length)show('✅ '+PREFIX+c.n,d.lines.join('\n\n———\n\n'),'ok');
+        if(d.done)break;
+      }catch(e){break}
+    }
+    if(my===RUN&&$('#outB').textContent.startsWith('Jawab ka intezar'))show('✅ '+PREFIX+c.n,'Command chal gayi. Jawab text ke baghair tha ya WhatsApp chat mein dekho.','ok');
+  }catch(e){
+    if(e.status===401){logout();return}
+    show('❌ '+PREFIX+c.n,e.message,'bd');
+  }
+}
+
+async function loadGroups(){
+  const b=$('#grp');b.textContent='⏳ Load ho raha hai…';
+  try{
+    const d=await api('/api/panel/groups?session='+encodeURIComponent($('#ses').value));
+    const s=$('#chat');s.innerHTML='<option value="self">📱 Apna chat (self)</option>';
+    d.groups.forEach(g=>{const o=document.createElement('option');o.value=g.id;o.textContent='👥 '+g.name+' ('+g.size+')';s.appendChild(o)});
+    b.textContent='👥 Groups ('+d.groups.length+')';
+  }catch(e){b.textContent='👥 Groups load karo';show('❌ Groups',e.message,'bd')}
+}
+
+function logout(){TOKEN='';sessionStorage.removeItem('rzt');localStorage.removeItem('rzt');location.reload()}
+
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  ['cmds','stat','logs'].forEach(t=>$('#t-'+t).classList.toggle('hide',t!==b.dataset.t));
+  if(b.dataset.t==='stat')stat();if(b.dataset.t==='logs')logs();
+});
+async function stat(){try{$('#statB').textContent=JSON.stringify(await api('/api/panel/metrics'),null,2)}catch(e){$('#statB').textContent=e.message}}
+async function logs(){try{const d=await api('/api/panel/logs?limit=80');$('#logB').textContent=d.logs.map(l=>l.time.slice(11,19)+' ['+l.level+'] '+l.message).join('\n')}catch(e){$('#logB').textContent=e.message}}
+
+$('#go').onclick=login;$('#tok').onkeydown=e=>{if(e.key==='Enter')login()};
+$('#logout').onclick=logout;$('#grp').onclick=loadGroups;$('#statR').onclick=stat;$('#logR').onclick=logs;
+let t;$('#q').oninput=()=>{clearTimeout(t);t=setTimeout(render,120)};
+$('#args').onkeydown=e=>{if(e.key==='Enter')e.target.blur()};
+
+if(TOKEN){api('/api/panel/me').then(start).catch(()=>{TOKEN='';sessionStorage.removeItem('rzt');localStorage.removeItem('rzt')})}
+})();
+</script></body></html>

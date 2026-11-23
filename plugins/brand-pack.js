@@ -5,6 +5,7 @@ const path = require('path');
 
 // ✅ Sirf import — baaki sab premium-check.js me hai
 const { requirePremium, isOwner, isPremiumUser } = require('../lib/premium-check');
+const { getUserConfigFromMongoDB, updateUserConfigInMongoDB } = require('../lib/database');
 
 // ===========================================================
 // 1. SETPP — Bot ki display pic change
@@ -84,8 +85,11 @@ cmd({
 
     try {
         await conn.updateProfileName(name);
-        config.BOT_NAME = name;
-        return ctx.reply(`✅ *Bot ka naam update ho gaya:* ${name}`);
+        // IMPORTANT: this is saved ONLY for the number that ran the command, not globally —
+        // changing config.BOT_NAME here used to rename the bot for every connected session at once.
+        const uc = await getUserConfigFromMongoDB(ctx.senderNumber);
+        await updateUserConfigInMongoDB(ctx.senderNumber, { ...uc, BOT_NAME: name });
+        return ctx.reply(`✅ *Bot ka naam update ho gaya:* ${name}\n_(Sirf aap ke number ke liye — baaqi sessions par asar nahi padega)_`);
     } catch (e) {
         return ctx.reply('❌ ' + e.message);
     }
@@ -133,11 +137,13 @@ cmd({
     try { pp = await conn.profilePictureUrl(conn.user.id, 'image'); } catch {}
 
     const [status] = await conn.fetchStatus(conn.user.id).catch(() => [{}]);
+    const uc = await getUserConfigFromMongoDB(ctx.senderNumber).catch(() => ({}));
+    const botName = uc.BOT_NAME || config.BOT_NAME;
 
     const text = [
-        `🤖 *${config.BOT_NAME || 'RIZO Mini Bot'} BOT INFO*`,
+        `🤖 *${botName || 'RIZO Mini Bot'} BOT INFO*`,
         '',
-        `📛 Name: *${config.BOT_NAME}*`,
+        `📛 Name: *${botName}*`,
         `👑 Owner: *Private*`,
         `🔧 Prefix: *${config.PREFIX}*`,
         `⚙️ Mode: *${config.WORK_TYPE || 'public'}*`,

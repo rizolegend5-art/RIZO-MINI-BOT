@@ -73,18 +73,9 @@ function maskNumber(number) {
     return n.length > 4 ? `${n.slice(0, 2)}••••••${n.slice(-2)}` : '••••';
 }
 
-function requirePanelAuth(req, res, next) {
-    const configured = process.env.RIZO_PANEL_TOKEN;
-    if (!configured) {
-        return res.status(503).json({ error: 'Panel is not configured. Set RIZO_PANEL_TOKEN in Railway Variables.' });
-    }
-    const supplied = Buffer.from(String(req.get('x-panel-token') || ''), 'utf8');
-    const expected = Buffer.from(configured, 'utf8');
-    const cryptoSafe = supplied.length === expected.length &&
-        crypto.timingSafeEqual(supplied, expected);
-    if (!cryptoSafe) return res.status(401).json({ error: 'Unauthorized' });
-    next();
-}
+// requirePanelAuth + owner-panel API live in lib/panel-api.js (token: RIZO_PANEL_TOKEN ya PANEL_SECRET, brute-force lock)
+const panelApi = require('./lib/panel-api');
+const requirePanelAuth = panelApi.requirePanelAuth;
 
 // ===========================================================
 // 🆕 OWNER NUMBERS — config se (multi-number support)
@@ -324,6 +315,7 @@ function applySendThrottle(conn) {
         const at = Math.max(now, nextAt);
         nextAt = at + 500 + Math.floor(Math.random() * 500);
         if (at > now) await delay(at - now);
+        try { panelApi.captureOutgoing(conn, jid, content); } catch (_) {}
         return originalSend(jid, content, options);
     };
 }
@@ -959,7 +951,7 @@ async function arslanPair(number, res = null) {
                             return reply('⛔ Group commands are for group admins and the bot owner.');
                         }
 
-                        if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
+                        if (cmd.react && !mek.__fromPanel) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
                         try {
                             await cmd.function(conn, mek, m, {
                                 from, quoted: mek, body, isCmd, command, args, q, text,
@@ -1066,6 +1058,14 @@ router.get('/api/panel/logs', requirePanelAuth, (req, res) => {
     const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
     res.set('Cache-Control', 'no-store');
     res.json({ logs: panelLogs.slice(-limit).reverse() });
+});
+
+// Owner panel buttons: /api/panel/me, /commands, /groups, /run, /result
+panelApi.mount(router, {
+    activeSockets,
+    isConnected: isNumberAlreadyConnected,
+    isHostNumber: (n) => isOwnerNumberCheck(n),
+    jidNormalizedUser
 });
 
 // ---------- Pair website + SEO (Google: "RIZO MD") ----------

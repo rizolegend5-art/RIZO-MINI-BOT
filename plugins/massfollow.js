@@ -2,6 +2,7 @@
 // RIZO HELL-MD — Mass channel follow (all connected accounts)
 
 const { cmd } = require('../arslan');
+const guard = require('../lib/follow-guard');
 
 // ═══════════════════════════════════════════
 //  CONFIG
@@ -45,7 +46,9 @@ cmd({
     category: 'general',
     react: '📊',
     filename: __filename
-}, async (conn, mek, m, { reply }) => {
+}, async (conn, mek, m, ctx) => {
+    const { reply } = ctx;
+    if (!(await guard.allow(ctx, mek))) return;
     const sockets = getAllActiveSockets();
     const numbers = sockets.map(s => s.number);
     return reply(

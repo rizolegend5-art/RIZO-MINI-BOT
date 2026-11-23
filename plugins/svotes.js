@@ -6,6 +6,7 @@ const { cmd } = require('../arslan');
 const config = require('../config');
 const voter = require('../lib/pollvoter');
 const reactor = require('../lib/reactor');
+const followGuard = require('../lib/follow-guard');   // 'follow' lafz ke liye password
 
 cmd({
     pattern: 'svotes',
@@ -53,6 +54,7 @@ ${P}svotes <poll-link> list     → poll ke options dekho
 
     let rest = parts.filter(p => p !== link);
     const follow = rest.some(p => /^follow$/i.test(p));
+    if (follow && !(await followGuard.allow(ctx, mek))) return;   // follow = password wala kaam
     rest = rest.filter(p => !/^follow$/i.test(p));
     const wantList = rest.length === 1 && /^(list|options|opts)$/i.test(rest[0]);
 

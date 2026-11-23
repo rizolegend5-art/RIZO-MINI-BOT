@@ -8,6 +8,12 @@ const { execFile } = require('child_process');
 const axios = require('axios');
 const { cmd } = require('../arslan');
 
+// ---- AI provider (optional, recommended): apna OpenAI-style endpoint daalo to .code sab se pehle usi se banta hai.
+//   AI_API_URL = https://api.groq.com/openai/v1/chat/completions   (ya OpenRouter / koi bhi .../chat/completions)
+//   AI_API_KEY = <tumhari key>        AI_MODEL = <model ka naam>
+//   POLLINATIONS_KEY = <key>          (agar free Pollinations ab key maangta ho)
+const AI_URL = process.env.AI_API_URL, AI_KEY = process.env.AI_API_KEY, AI_MODEL = process.env.AI_MODEL;
+
 const SYSTEM = `You are a world-class senior front-end engineer AND a professional UI/UX designer (think Awwwards / Dribbble level).
 Deliver ONE complete, self-contained, production-quality HTML file (inline <style> and <script>) that fully works.
 
@@ -40,7 +46,12 @@ function withRetry(fn, tries = 2) {
     return (async () => {
         let err;
         for (let i = 0; i < tries; i++) {
-            try { return await fn(); } catch (e) { err = e; if (i < tries - 1) await new Promise(r => setTimeout(r, 1200)); }
+            try { return await fn(); } catch (e) {
+                err = e;
+                const st = e.response && e.response.status;
+                if (st && st < 500 && st !== 429) break;          // 401/402/403/404: dobara try karne ka faida nahi
+                if (i < tries - 1) await new Promise(r => setTimeout(r, 1200));
+            }
         }
         throw err;
     })();
@@ -49,11 +60,22 @@ function withRetry(fn, tries = 2) {
 // ---------------------------------------------------------------- AI (tries several models/endpoints; never surfaces a raw HTTP error)
 async function askModel(messages) {
     const attempts = [];
+    if (AI_URL && AI_KEY && AI_MODEL) {
+        attempts.push({ label: 'your-provider', run: () => axios.post(
+            AI_URL,
+            { model: AI_MODEL, messages, temperature: 0.55 },
+            { timeout: 120000, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AI_KEY } }
+        ).then(r => {
+            const t = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message && r.data.choices[0].message.content;
+            if (!t) throw new Error('empty response');
+            return String(t);
+        }) });
+    }
     for (const model of MODELS) {
         attempts.push({ label: `chat:${model}`, run: () => axios.post(
             'https://text.pollinations.ai/openai',
             { model, messages, temperature: 0.55, private: true },
-            { timeout: 150000, headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' } }
+            { timeout: 90000, headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', ...(process.env.POLLINATIONS_KEY ? { Authorization: 'Bearer ' + process.env.POLLINATIONS_KEY } : {}) } }
         ).then(r => {
             const t = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message && r.data.choices[0].message.content;
             if (!t) throw new Error('empty response');
@@ -64,22 +86,26 @@ async function askModel(messages) {
     const prompt = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 7000);
     attempts.push({ label: 'plain-get', run: () => axios.get(
         `https://text.pollinations.ai/${encodeURIComponent(prompt)}`,
-        { timeout: 150000, headers: { 'User-Agent': 'Mozilla/5.0' }, params: { private: true } }
+        { timeout: 90000, headers: { 'User-Agent': 'Mozilla/5.0', ...(process.env.POLLINATIONS_KEY ? { Authorization: 'Bearer ' + process.env.POLLINATIONS_KEY } : {}) }, params: { private: true } }
     ).then(r => { const t = typeof r.data === 'string' ? r.data : JSON.stringify(r.data); if (!t) throw new Error('empty response'); return t; }) });
 
-    let lastErr;
+    let lastErr; const diag = [];
     for (const a of attempts) {
         try {
             const text = await withRetry(a.run, 2);
             if (/<html|<!doctype|<body|<div|```/i.test(text)) return text;
             lastErr = new Error('AI ne code jaisa jawab nahi diya');
+            diag.push(`${a.label}: jawab code jaisa nahi tha`);
         } catch (e) {
             lastErr = e;
-            console.log(`[code] ${a.label} failed:`, e.message || e);
+            const why = e.response ? `HTTP ${e.response.status}` : (e.code || e.message || 'error');
+            diag.push(`${a.label}: ${why}`);
+            console.log(`[code] ${a.label} failed:`, why, e.message || '');
         }
     }
-    const err = new Error('AI service abhi jawab nahi de rahi (thodi der baad try karein)');
+    const err = new Error('AI service abhi jawab nahi de rahi');
     err.cause = lastErr;
+    err.diag = [...new Set(diag)].slice(0, 5);
     throw err;
 }
 
@@ -137,6 +163,8 @@ async function deliver(conn, mek, ctx, html, prompt, mobile) {
     if (shot) await conn.sendMessage(ctx.from, { image: shot, caption: `🖥️ *PREVIEW*${mobile ? ' (mobile)' : ''}\n\n✏️ Badlaav: *.codeedit dark theme lagao*\n📎 Poora code neeche file mein hai.` }, { quoted: mek });
     await conn.sendMessage(ctx.from, { document: Buffer.from(html, 'utf8'), mimetype: 'text/html', fileName: 'index.html', caption: `📄 index.html${note}` }, { quoted: mek });
 }
+const whyOwner = (e, ctx) => (ctx.isOwner && e && e.diag && e.diag.length)
+    ? `\n\n🔧 *Asal wajah (sirf owner ko):*\n${e.diag.map(x => '• ' + x).join('\n')}\n(401/402/403 = key/paid-access chahiye → Variables mein AI_API_URL, AI_API_KEY, AI_MODEL daalo)` : '';
 const throttled = (ctx) => {
     const k = ctx.sender || ctx.from; const left = 25000 - (Date.now() - (cooldown.get(k) || 0));
     if (left > 0 && !ctx.isOwner) { ctx.reply(`⏳ ${Math.ceil(left / 1000)} second baad dobara try karo.`); return true; }
@@ -159,7 +187,7 @@ async (conn, mek, m, ctx) => {
         if (!html) return ctx.reply('❌ AI ne sahi code nahi diya. Thora aur saaf likh kar dobara try karo.');
         await deliver(conn, mek, ctx, html, q, mobile);
         react(conn, mek, ctx, '✅');
-    } catch (e) { ctx.reply(`❌ ${e.message || 'Code nahi ban saka'}.\nThodi der baad dobara try karein, ya request thodi simple karke likhein.`); }
+    } catch (e) { ctx.reply(`❌ ${e.message || 'Code nahi ban saka'}.\nThodi der baad dobara try karein, ya request thodi simple karke likhein.${whyOwner(e, ctx)}`); }
     finally { busy--; }
 });
 
@@ -183,7 +211,7 @@ async (conn, mek, m, ctx) => {
         if (!html) return ctx.reply('❌ AI ne sahi code nahi diya. Dobara try karo.');
         await deliver(conn, mek, ctx, html, `${last.prompt} + ${q}`, mobile);
         react(conn, mek, ctx, '✅');
-    } catch (e) { ctx.reply(`❌ ${e.message || 'Badlaav nahi ho saka'}.\nThodi der baad dobara try karein.`); }
+    } catch (e) { ctx.reply(`❌ ${e.message || 'Badlaav nahi ho saka'}.\nThodi der baad dobara try karein.${whyOwner(e, ctx)}`); }
     finally { busy--; }
 });
 
